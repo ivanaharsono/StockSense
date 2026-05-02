@@ -128,26 +128,53 @@ export default function AIChat() {
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef(null);
 
+  // Auto-scroll ke bawah kalau ada pesan baru
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior:"smooth" });
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
 
-  function send(text) {
+  // Fungsi pintar buat nembak ke FastAPI
+  const send = async (text) => {
     if (!text.trim() || loading) return;
-    const userMsg = { type:"user", text };
+
+    // 1. Munculin pesan Vana di layar
+    const userMsg = { type: "user", text };
     setMessages(prev => [...prev, userMsg]);
     setInput("");
     setLoading(true);
-    setTimeout(() => {
-      const response = AI_RESPONSES[text] || DEFAULT_RESPONSE;
-      setMessages(prev => [...prev, { type:"ai", response }]);
-      setLoading(false);
-    }, 800 + Math.random() * 600);
-  }
 
-  function handleKey(e) {
-    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(input); }
-  }
+    try {
+      const response = await fetch("http://127.0.0.1:8000/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: text }), 
+      });
+
+      const data = await response.json();
+      console.log("Data mentah dari backend:", data); // Biar bisa dicek di Inspect Element > Console
+      
+      if (data.reply) {
+        setMessages(prev => [...prev, { type: "ai", response: data.reply }]);
+      } else if (data.error) {
+        // Nah, ini biar error aslinya bocor ke layar!
+        setMessages(prev => [...prev, { type: "ai", response: `Error aslinya gini: ${data.error}` }]);
+      } else {
+        setMessages(prev => [...prev, { type: "ai", response: "Waduh, AI-nya lagi pusing balas apa." }]);
+      }
+    } catch (err) {
+      console.error(err);
+      setMessages(prev => [...prev, { type: "ai", response: "Gagal connect ke server backend, nih! Cek Uvicorn-nya." }]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleKey = (e) => {
+    if (e.key === "Enter" && !e.shiftKey) { 
+      e.preventDefault(); 
+      send(input); 
+    }
+  };
 
   return (
     <div style={{ display:"grid", gridTemplateColumns:"220px 1fr", height:"calc(100vh - 56px)" }}>
@@ -177,7 +204,8 @@ export default function AIChat() {
         {/* Header */}
         <div style={{ padding:"12px 20px", borderBottom:"1px solid var(--border)", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
           <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-            <AvatarIcon />
+            {/* Pastikan komponen AvatarIcon ada di file kamu */}
+            <div style={{ width: 30, height: 30, borderRadius: '50%', background: 'var(--accent)' }}></div>
             <div>
               <p style={{ fontSize:13, fontWeight:600, color:"var(--accent2)" }}>StockSense AI</p>
               <p style={{ fontSize:11, color:"var(--text2)", fontFamily:"var(--mono)" }}>Connected to inventory data</p>
@@ -193,13 +221,14 @@ export default function AIChat() {
         <div style={{ flex:1, overflowY:"auto", padding:20, display:"flex", flexDirection:"column", gap:16 }}>
           {messages.length === 0 && (
             <div style={{ display:"flex", gap:10, alignItems:"flex-start" }}>
-              <AvatarIcon />
+              <div style={{ width: 30, height: 30, borderRadius: '50%', background: 'var(--accent)' }}></div>
               <div className="chat-bubble-ai">
                 <p style={{ fontSize:13, lineHeight:1.7, color:"var(--text)", marginBottom:12 }}>
                   Halo! Saya <strong style={{ color:"var(--accent2)" }}>StockSense AI</strong> — siap bantu analisa inventory kamu. Tanya apa aja soal stok, demand, risiko stockout, atau saran reorder.
                 </p>
                 <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
-                  {QUICK_PROMPTS.slice(0,3).map(q => (
+                  {/* Panggil fungsi send() pas diklik */}
+                  {["Berapa stok P1001?", "Analisa risiko hari ini", "Pengaruh cuaca?"].map(q => (
                     <button key={q} onClick={() => send(q)} className="btn btn-ghost" style={{ fontSize:11, borderRadius:20, color:"var(--accent2)", borderColor:"var(--accent3)", padding:"4px 10px" }}>{q.slice(0,28)}... ↗</button>
                   ))}
                 </div>
@@ -208,20 +237,16 @@ export default function AIChat() {
           )}
           {messages.map((m, i) => (
             m.type === "user"
-              ? <UserMessage key={i} text={m.text} />
-              : <AIMessage key={i} response={m.response} />
+              // Pastikan UserMessage dan AIMessage sudah terdefinisi di file kamu
+              ? <div key={i} style={{ alignSelf: 'flex-end', background: 'var(--accent)', color: 'white', padding: '10px 14px', borderRadius: '14px 14px 0 14px' }}>{m.text}</div>
+              : <div key={i} style={{ alignSelf: 'flex-start', background: 'var(--surface)', padding: '10px 14px', borderRadius: '14px 14px 14px 0' }}>{m.response}</div>
           ))}
-          {loading && <TypingIndicator />}
+          {loading && <div style={{ alignSelf: 'flex-start', fontSize: 12, color: 'var(--text3)' }}>AI sedang mengetik...</div>}
           <div ref={bottomRef} />
         </div>
 
         {/* Input area */}
         <div style={{ padding:"12px 20px", borderTop:"1px solid var(--border)" }}>
-          <div style={{ display:"flex", gap:6, marginBottom:10, flexWrap:"wrap" }}>
-            {QUICK_PROMPTS.slice(0,3).map(q => (
-              <button key={q} onClick={() => send(q)} className="btn btn-ghost" style={{ fontSize:11, padding:"5px 12px", borderRadius:20 }}>{q.slice(0,22)}...</button>
-            ))}
-          </div>
           <div style={{ display:"flex", gap:8, alignItems:"flex-end" }}>
             <textarea
               value={input}
@@ -229,13 +254,13 @@ export default function AIChat() {
               onKeyDown={handleKey}
               rows={2}
               placeholder="Tanya soal inventory kamu... (Enter untuk kirim)"
-              style={{ flex:1, resize:"none" }}
+              style={{ flex:1, resize:"none", padding: '10px', borderRadius: '8px', border: '1px solid var(--border)' }}
             />
-            <button onClick={() => send(input)} className="btn btn-primary" style={{ height:42, width:42, padding:0, display:"flex", alignItems:"center", justifyContent:"center", borderRadius:10 }}>
+            <button onClick={() => send(input)} className="btn btn-primary" style={{ height:42, width:42, padding:0, display:"flex", alignItems:"center", justifyContent:"center", borderRadius:10, background: 'var(--accent)', border: 'none', cursor: 'pointer' }}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
             </button>
           </div>
-          <p style={{ fontSize:11, color:"var(--text3)", fontFamily:"var(--mono)", marginTop:8, textAlign:"center" }}>Terhubung ke FastAPI backend · data real-time dari PostgreSQL</p>
+          <p style={{ fontSize:11, color:"var(--text3)", fontFamily:"var(--mono)", marginTop:8, textAlign:"center" }}>Terhubung ke FastAPI backend · Gemini AI 1.5 Flash</p>
         </div>
       </div>
     </div>
