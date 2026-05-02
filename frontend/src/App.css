@@ -1,0 +1,285 @@
+/* IMPORT FONT INTER */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  /* BACKGROUND & SURFACES (Putih & Slate) */
+  --bg: #f8fafc;        /* Background utama yang lega */
+  --bg2: #ffffff;       /* Putih bersih */
+  --bg3: #f1f5f9;       /* Abu-abu sangat muda buat header tabel */
+  --surface: #ffffff;   /* Putih buat Card */
+  --surface2: #f8fafc;
+  
+  /* BORDERS (Tipis & Halus) */
+  --border: #e2e8f0;    
+  --border2: #cbd5e1;
+  
+  /* TEXT (Slate-based, bukan Hitam pekat biar elegan) */
+  --text: #1e293b;      /* Dark slate */
+  --text2: #64748b;     /* Medium slate */
+  --text3: #94a3b8;     /* Light slate */
+  
+  /* ACCENT (PINK MODERN) */
+  --accent: #f06292;    /* Pink utama */
+  --accent2: #d81b60;   /* Pink gelap buat hover */
+  --accent3: #fdf2f8;   /* Pink sangat muda buat background badge/link */
+  
+  /* STATUS COLORS */
+  --green: #10b981;
+  --green-bg: #ecfdf5;
+  --amber: #f59e0b;
+  --amber-bg: #fffbeb;
+  --red: #ef4444;
+  --red-bg: #fef2f2;
+  --blue: #3b82f6;
+
+  /* TYPOGRAPHY & RADIUS */
+  --font: 'Inter', sans-serif;
+  --mono: 'Inter', sans-serif; /* Full Inter sesuai request kamu */
+  --radius: 7px;
+  --radius-lg: 7px; /* Bikin makin rounded biar makin modern */
+}
+
+html, body, #root { height: 100%; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+.app { display: flex; flex-direction: column; min-height: 100vh; }
+
+/* NAVBAR (Hanya Update Bagian Brand) */
+.navbar {
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  padding: 0 28px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+}
+
+/* Bagian ini biar icon & teks baris ke samping */
+.navbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.brand-icon {
+  width: 32px; height: 32px;
+  background: var(--accent);
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+
+.brand-name { 
+  font-size: 18px; 
+  font-weight: 800; 
+  color: var(--text); 
+  letter-spacing: -0.5px; 
+  margin: 0;
+}
+
+.brand-badge {
+  font-size: 10px;
+  background: var(--accent3);
+  color: var(--accent);
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-weight: 600;
+  border: 1px solid var(--accent3);
+}
+
+.nav-link {
+  font-size: 13px;
+  color: var(--text2);
+  font-weight: 500;
+  text-decoration: none;
+  padding: 8px 16px;
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+
+.nav-link:hover { color: var(--accent); background: var(--accent3); }
+
+.nav-link.active {
+  color: var(--accent);
+  background: var(--accent3);
+  font-weight: 600;
+}
+
+/* PAGE WRAPPER */
+.page { padding: 32px; max-width: 1400px; margin: 0 auto; }
+
+.page-header h1 { font-size: 28px; font-weight: 800; color: var(--text); }
+.page-header {
+  margin-bottom: 20px; /* Tambahin jarak biar Inventory Overview nggak nempel ke kartu */
+}
+
+.grid-4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 24px; /* Naikin dari 12px/20px biar lebih lega */
+  margin-bottom: 32px;
+}
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 32px; /* Jarak antar chart biar gak dempetan */
+  margin-bottom: 32px;
+}
+
+.metric-card {
+  padding: 24px; /* Tambahin padding dalem biar angka 2.800-nya nggak mepet */
+}
+
+/* CARDS (Efek Shadow Tipis ala Apple/Vercel) */
+.card, .metric-card, .chart-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+}
+
+.metric-label {
+  font-size: 12px; color: var(--text2);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 12px;
+}
+
+.metric-value { font-size: 32px; font-weight: 800; color: var(--text); }
+.metric-sub { font-size: 12px; font-weight: 500; }
+
+/* TABLE (Clean White) */
+table { width: 100%; border-collapse: collapse; }
+thead tr { background: var(--bg3); border-bottom: 1px solid var(--border); }
+th {
+  padding: 14px 16px;
+  color: var(--text2); font-weight: 600;
+  font-size: 11px; text-transform: uppercase;
+}
+td { padding: 14px 16px; border-bottom: 1px solid var(--border); color: var(--text); }
+tr:hover td { background: var(--bg); }
+
+/* INPUTS (Sekarang Putih & Sudut Tegas) */
+input[type="text"], select {
+  background: #ffffff; /* Ganti dari item ke putih */
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: var(--radius); /* Pakai 8px tadi */
+  padding: 10px 14px;
+  font-size: 14px;
+  outline: none;
+  transition: all 0.2s;
+}
+
+/* Biar pas diklik ada efek pink tipis */
+input[type="text"]:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent3);
+}
+
+/* BUTTONS */
+.btn {
+  padding: 10px 20px;
+  border-radius: var(--radius); 
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: transform 0.1s, opacity 0.2s;
+}
+
+.btn:active {
+  transform: scale(0.97); /* Efek mendem dikit pas diklik */
+}
+
+/* AI CHAT BUBBLES */
+.chat-bubble-ai {
+  background: #f1f5f9;
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 0 16px 16px 16px;
+  padding: 14px 18px;
+}
+
+.chat-bubble-user {
+  background: var(--accent);
+  color: white;
+  border-radius: 16px 0 16px 16px;
+  padding: 12px 16px;
+}
+
+/* SCROLLBAR */
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+.grid-4 { 
+  display: grid; 
+  grid-template-columns: repeat(4, 1fr); 
+  gap: 20px; 
+}
+
+.grid-3 { 
+  display: grid; 
+  grid-template-columns: repeat(3, 1fr); 
+  gap: 20px; 
+}
+
+.grid-2 { 
+  display: grid; 
+  grid-template-columns: repeat(2, 1fr); 
+  gap: 24px; 
+}
+
+/* Biar Legend Chart Nggak Numpuk Ke Bawah */
+.chart-legend { 
+  display: flex; 
+  gap: 16px; 
+  margin-bottom: 16px; 
+  flex-wrap: wrap; 
+}
+
+.legend-item { 
+  font-size: 12px; 
+  color: var(--text2); 
+  display: flex; 
+  align-items: center; 
+  gap: 6px; 
+  font-weight: 500;
+}
+
+.legend-dot { 
+  width: 10px; 
+  height: 10px; 
+  border-radius: 3px; 
+  display: inline-block; 
+}
+
+/* Responsif: Kalau Layar Kecil (Mobile/Tablet), Tumpuk ke Bawah Biar Gak Penyok */
+@media (max-width: 1024px) {
+  .grid-4 { grid-template-columns: repeat(2, 1fr); }
+  .grid-3 { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 768px) {
+  .grid-4, .grid-3, .grid-2 { grid-template-columns: 1fr; }
+}
