@@ -9,8 +9,9 @@ const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
   return (
     <div style={{
-      background: "#1a1a28", border: "1px solid #252538",
+      background: "white", border: "1px solid rgba(240, 98, 146, 0.3)",
       borderRadius: 8, padding: "10px 14px", fontSize: 12,
+      boxShadow: "0 4px 12px rgba(240, 98, 146, 0.1)",
       fontFamily: "DM Mono, monospace",
     }}>
       <p style={{ color: "#8888aa", marginBottom: 6 }}>{label}</p>
@@ -51,8 +52,8 @@ export default function Dashboard() {
         // Backend diharapkan return: [{ weather, stockout, safe }, ...]
         const formattedWeather = weatherRes.data.map((w) => ({
           weather: w.weather,
-          high: w.stockout,  // rename stockout → high buat label chart
-          low: w.safe,       // rename safe → low buat label chart
+          high: w.high,  
+          low: w.low,      
         }));
         setWeatherData(formattedWeather);
       } catch (err) {
@@ -80,7 +81,7 @@ export default function Dashboard() {
       setAiResult(result);
     } catch (err) {
       console.error("AI prediction error:", err);
-      alert("Gagal ambil data AI. Cek apakah ID sudah benar?");
+      alert("AI gagal ambil data. Cek apakah ID sudah benar?");
     } finally {
       setLoadingAi(false);
     }
