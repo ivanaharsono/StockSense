@@ -2,6 +2,7 @@ import os
 import joblib
 import pandas as pd
 import numpy as np
+from datetime import date
 from dotenv import load_dotenv
 from typing import Optional
 
@@ -11,9 +12,7 @@ from sqlalchemy import create_engine, Column, Integer, String, Float, func
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 from pydantic import BaseModel
-
-
-import google.generativeai as genai
+from groq import Groq
 
 load_dotenv()
 
@@ -51,19 +50,13 @@ except Exception as e:
     print(f"⚠️ Gagal memuat ML model: {e}")
     ml_model = None
 
-# ─── Gemini AI ───────────────────────────────────────────────────────────────
+# ─── Groq AI ─────────────────────────────────────────────────────────────────
 try:
-    genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-    gemini = genai.GenerativeModel("gemini-2.0-flash-lite",
-    generation_config=genai.GenerationConfig(
-        max_output_tokens=200,
-        temperature=0.5,
-    )
-)
-    print("✅ Gemini AI siap!")
+    groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+    print("✅ Groq AI siap!")
 except Exception as e:
-    print(f"⚠️ Gagal init Gemini: {e}")
-    gemini = None
+    print(f"⚠️ Gagal init Groq: {e}")
+    groq_client = None
 
 # ─── CORS ────────────────────────────────────────────────────────────────────
 app.add_middleware(
@@ -83,17 +76,19 @@ def get_db():
         db.close()
 
 # ─── Schemas ─────────────────────────────────────────────────────────────────
+
+# POST /products — cuma 4 field wajib, sisanya optional dengan default
 class ProductCreate(BaseModel):
     product_id: str
-    date: str
     store_id: str
     current_stock: int
     daily_demand: int
-    lead_time_days: int
-    supplier_reliability_score: float
-    promotion_active: str
-    weather_impact: str
-    stockout_risk: str
+    date: Optional[str] = None
+    lead_time_days: Optional[int] = 3
+    supplier_reliability_score: Optional[float] = 80.0
+    promotion_active: Optional[str] = "No"
+    weather_impact: Optional[str] = "Low"
+    stockout_risk: Optional[str] = "No"
 
 class ProductUpdate(BaseModel):
     current_stock: Optional[int] = None
@@ -153,7 +148,42 @@ def get_product(product_id: str, db: Session = Depends(get_db)):
 
 @app.post("/products", status_code=201)
 def create_product(payload: ProductCreate, db: Session = Depends(get_db)):
-    product = Product(**payload.dict())
+    # Auto tanggal hari ini kalau ga dikirim
+    product_date = payload.date or str(date.today())
+
+    # Prediksi stockout otomatis pakai ML model kalau ada
+    predicted_risk = payload.stockout_risk
+    if ml_model is not None:
+        try:
+            promo_map = {"Yes": 1, "No": 0}
+            weather_map = {"Low": 0, "Medium": 1, "High": 2}
+            days_of_stock = payload.current_stock / (payload.daily_demand + 0.1)
+            input_data = pd.DataFrame([{
+                "current_stock": payload.current_stock,
+                "daily_demand": payload.daily_demand,
+                "lead_time_days": payload.lead_time_days,
+                "supplier_reliability_score": payload.supplier_reliability_score,
+                "promotion_active": promo_map.get(payload.promotion_active, 0),
+                "weather_impact": weather_map.get(payload.weather_impact, 0),
+                "days_of_stock": days_of_stock,
+            }])
+            prediction = ml_model.predict(input_data)[0]
+            predicted_risk = "Yes" if prediction == 1 else "No"
+        except Exception:
+            pass
+
+    product = Product(
+        product_id=payload.product_id,
+        date=product_date,
+        store_id=payload.store_id,
+        current_stock=payload.current_stock,
+        daily_demand=payload.daily_demand,
+        lead_time_days=payload.lead_time_days,
+        supplier_reliability_score=payload.supplier_reliability_score,
+        promotion_active=payload.promotion_active,
+        weather_impact=payload.weather_impact,
+        stockout_risk=predicted_risk,
+    )
     db.add(product)
     db.commit()
     db.refresh(product)
@@ -181,56 +211,37 @@ def delete_product(product_id: str, db: Session = Depends(get_db)):
     db.commit()
     return {"message": f"Product {product_id} deleted"}
 
-# Bikin cetakan datanya
-class ProductInput(BaseModel):
-    product_id: str
-    store_id: str
-    current_stock: int
-    daily_demand: int
-
-@app.post("/products")
-async def add_product(prod: ProductInput):
-    df = pd.read_csv("data_stok.csv")
-    
-    # Bikin baris data baru (Risk sama Supplier kita kasih default dulu)
-    new_data = {
-        "product_id": prod.product_id,
-        "store_id": prod.store_id,
-        "current_stock": prod.current_stock,
-        "daily_demand": prod.daily_demand,
-        "stockout_risk": "No", 
-        "supplier_reliability_score": 80 
-    }
-    
-    # Masukin ke dataframe terus save nimpa CSV lama
-    df = pd.concat([df, pd.DataFrame([new_data])], ignore_index=True)
-    df.to_csv("data_stok.csv", index=False)
-    
-    return {"message": "Mantap, produk masuk!"}
-
 # ─── DASHBOARD ───────────────────────────────────────────────────────────────
-# HAPUS TULISAN /api DI BARIS INI:
-@app.get("/dashboard/stats") 
-async def get_dashboard_stats():
+@app.get("/dashboard/stats")
+def get_dashboard_stats(db: Session = Depends(get_db)):
     try:
-        import pandas as pd
-        df = pd.read_csv("data_stok.csv")
-        
-        # Pisahin 10 data High Risk dan 10 data Safe Stocks
-        high_risk = df[df["stockout_risk"] == "Yes"].head(10).fillna("").to_dict(orient="records")
-        low_risk = df[df["stockout_risk"] == "No"].head(10).fillna("").to_dict(orient="records")
-        
+        total_products = db.query(Product).count()
+        avg_demand = float(db.query(func.avg(Product.daily_demand)).scalar() or 0)
+        avg_supplier = float(db.query(func.avg(Product.supplier_reliability_score)).scalar() or 0)
+        stockout_count = db.query(Product).filter(Product.stockout_risk == "Yes").count()
+        high_risk = db.query(Product).filter(Product.stockout_risk == "Yes").limit(10).all()
+
         return {
-            "total_products": len(df),
-            "avg_daily_demand": int(df["daily_demand"].mean()),
-            "stockout_risk_count": len(df[df["stockout_risk"] == "Yes"]),
-            "avg_supplier_score": round(df["supplier_reliability_score"].mean(), 1),
-            "high_risk_products": high_risk,
-            "low_risk_products": low_risk  
+            "total_products": total_products,
+            "avg_daily_demand": round(avg_demand, 1),
+            "avg_supplier_score": round(avg_supplier, 1),
+            "stockout_risk_count": stockout_count,
+            "high_risk_products": [
+                {
+                    "product_id": p.product_id,
+                    "store_id": p.store_id,
+                    "current_stock": p.current_stock,
+                    "daily_demand": p.daily_demand,
+                    "lead_time_days": p.lead_time_days,
+                    "stockout_risk": p.stockout_risk,
+                    "promotion_active": p.promotion_active,
+                }
+                for p in high_risk
+            ],
         }
     except Exception as e:
-        print("Error stats:", e)
-        return {}
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/dashboard/trend")
 def get_demand_trend(db: Session = Depends(get_db)):
@@ -263,6 +274,8 @@ def get_store_performance(db: Session = Depends(get_db)):
         stockout = db.query(Product).filter(Product.store_id == store_id, Product.stockout_risk == "Yes").count()
         avg_demand = float(db.query(func.avg(Product.daily_demand)).filter(Product.store_id == store_id).scalar() or 0)
         avg_stock = float(db.query(func.avg(Product.current_stock)).filter(Product.store_id == store_id).scalar() or 0)
+        promo_demand = float(db.query(func.avg(Product.daily_demand)).filter(Product.store_id == store_id, Product.promotion_active == "Yes").scalar() or 0)
+        no_promo_demand = float(db.query(func.avg(Product.daily_demand)).filter(Product.store_id == store_id, Product.promotion_active == "No").scalar() or 0)
         result.append({
             "store_id": store_id,
             "total_products": total,
@@ -270,6 +283,8 @@ def get_store_performance(db: Session = Depends(get_db)):
             "stockout_rate": round((stockout / total * 100) if total > 0 else 0, 1),
             "avg_demand": round(avg_demand, 1),
             "avg_stock": round(avg_stock, 1),
+            "promoD": round(promo_demand, 1),
+            "noPromoD": round(no_promo_demand, 1),
         })
     return sorted(result, key=lambda x: x["stockout_rate"], reverse=True)
 
@@ -277,106 +292,47 @@ def get_store_performance(db: Session = Depends(get_db)):
 @app.get("/analytics/weather")
 def get_weather_impact(db: Session = Depends(get_db)):
     result = []
+    weather_levels = ["Low", "Medium", "High"]
     for level in ["Low", "Medium", "High"]:
-        total = db.query(Product).filter(Product.weather_impact == level).count()
-        stockout = db.query(Product).filter(Product.weather_impact == level, Product.stockout_risk == "Yes").count()
+        total = db.query(Product).filter(Product.weather_impact.ilike(f"%{level}%")).count()
+        stockout = db.query(Product).filter(
+            Product.weather_impact.ilike(f"%{level}%"), 
+            Product.stockout_risk.ilike("%Yes%") 
+        ).count()
+        
         result.append({
             "weather": level,
             "total": total,
-            "stockout": stockout,
-            "safe": total - stockout,
+            "High risk": stockout,
+            "Low risk": total - stockout,
+            "high": stockout,
+            "low": total - stockout,
             "stockout_rate": round((stockout / total * 100) if total > 0 else 0, 1),
         })
     return result
 
-# --- ENDPOINTS KHUSUS UNTUK ANALYTICS ---
 
-@app.get("/api/stores")
-async def get_api_stores():
-    try:
-        import pandas as pd
-        df = pd.read_csv("data_stok.csv")
-        return df["store_id"].dropna().unique().tolist()
-    except:
-        return []
+@app.get("/analytics/suppliers")
+def get_supplier_stats(db: Session = Depends(get_db)):
+    results = (
+        db.query(
+            Product.store_id,
+            func.avg(Product.supplier_reliability_score).label("avg_score"),
+            func.avg(Product.lead_time_days).label("avg_lead_time"),
+        )
+        .group_by(Product.store_id)
+        .order_by(func.avg(Product.supplier_reliability_score))
+        .all()
+    )
+    return [
+        {
+            "store_id": r.store_id,
+            "avg_reliability_score": round(float(r.avg_score or 0), 1),
+            "avg_lead_time_days": round(float(r.avg_lead_time or 0), 1),
+        }
+        for r in results
+    ]
 
-@app.get("/api/store-data")
-async def get_api_store_data():
-    try:
-        import pandas as pd
-        df = pd.read_csv("data_stok.csv")
-        store_data = {}
-        for store in df["store_id"].dropna().unique():
-            store_df = df[df["store_id"] == store]
-            
-            total_items = len(store_df)
-            high_risk = len(store_df[store_df["stockout_risk"] == "Yes"]) 
-            rate = round((high_risk / total_items) * 100, 1) if total_items > 0 else 0
-            
-            store_data[store] = {
-                "promoD": int(store_df[store_df["promotion_active"] == "Yes"]["daily_demand"].sum()),
-                "noPromoD": int(store_df[store_df["promotion_active"] == "No"]["daily_demand"].sum()),
-                "avgDemand": int(store_df["daily_demand"].mean()) if not pd.isna(store_df["daily_demand"].mean()) else 0,
-                "avgStock": int(store_df["current_stock"].mean()) if not pd.isna(store_df["current_stock"].mean()) else 0,
-                "stockoutRate": rate
-            }
-        return store_data
-    except Exception as e:
-        print(f"Error store-data: {e}")
-        return {}
-
-@app.get("/api/weather-risk")
-async def get_api_weather_risk():
-    try:
-        import pandas as pd
-        df = pd.read_csv("data_stok.csv")
-        weather_data = []
-        # Kita paksa urutannya dari Low ke High biar rapi
-        for w in ["Low", "Medium", "High"]: 
-            w_df = df[df["weather_impact"] == w]
-            weather_data.append({
-                "weather": w,
-                "high": len(w_df[w_df["stockout_risk"] == "Yes"]),
-                "medium": 0,
-                "low": len(w_df[w_df["stockout_risk"] == "No"])
-            })
-        return weather_data
-    except Exception as e:
-        print(f"Error weather: {e}")
-        return []
-
-@app.get("/api/suppliers")
-async def get_api_suppliers():
-    try:
-        import pandas as pd
-        df = pd.read_csv("data_stok.csv")
-        return [
-            {"name": "Supplier Utama", "score": int(df["supplier_reliability_score"].max())},
-            {"name": "Supplier Cadangan", "score": int(df["supplier_reliability_score"].mean())},
-            {"name": "Supplier Lokal", "score": int(df["supplier_reliability_score"].min())}
-        ]
-    except:
-        return []
-
-@app.get("/api/trend")
-async def get_api_trend():
-    try:
-        import pandas as pd
-        df = pd.read_csv("data_stok.csv")
-        trend = []
-        if "date" in df.columns:
-            grouped = df.groupby("date").agg({"current_stock": "sum", "daily_demand": "sum"}).reset_index()
-            grouped = grouped.sort_values("date")
-            for _, row in grouped.tail(30).iterrows(): 
-                trend.append({
-                    "date": str(row["date"]),
-                    "stock": int(row["current_stock"]),
-                    "demand": int(row["daily_demand"])
-                })
-        return trend
-    except:
-        return []
-    
 # ─── ML PREDICTION ───────────────────────────────────────────────────────────
 @app.get("/ai/predict/{product_id}")
 def predict_stockout(product_id: str, db: Session = Depends(get_db)):
@@ -415,59 +371,55 @@ def predict_stockout(product_id: str, db: Session = Depends(get_db)):
         ),
     }
 
-# ─── GEMINI AI CHAT ───────────────────────────────────────────────────────────
+# ─── GROQ AI CHAT ─────────────────────────────────────────────────────────────
 @app.post("/api/chat")
 async def chat_with_ai(request: ChatRequest, db: Session = Depends(get_db)):
+    if groq_client is None:
+        raise HTTPException(status_code=500, detail="Groq AI tidak tersedia. Cek GROQ_API_KEY di .env")
     try:
         total = db.query(Product).count()
         stockout_count = db.query(Product).filter(Product.stockout_risk == "Yes").count()
         avg_demand = float(db.query(func.avg(Product.daily_demand)).scalar() or 0)
 
-        system_context = f"""
-Kamu adalah StockSense AI, asisten inventory.
-Data saat ini: {total} produk, {stockout_count} berisiko stockout, avg demand {round(avg_demand,1)}/hari.
-Jawab singkat dalam Bahasa Indonesia, maksimal 3 kalimat.
-"""
-        full_prompt = f"{system_context}\nUser: {request.message}"
-        
-        print(f"🔍 Ngirim ke Gemini: {request.message}")
-        response = gemini.generate_content(full_prompt)
-        print(f"✅ Gemini jawab: {response.text[:50]}")
+        system_prompt = f"""Kamu adalah StockSense AI, asisten inventory cerdas.
+Data real-time: {total} produk, {stockout_count} berisiko stockout, avg demand {round(avg_demand,1)}/hari.
+Jawab singkat dalam Bahasa Indonesia, maksimal 3 kalimat."""
 
-        return {"status": "success", "reply": response.text}
+        response = groq_client.chat.completions.create(
+            model="llama-3.1-8b-instant",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": request.message}
+            ],
+            max_tokens=200,
+            temperature=0.5,
+        )
+
+        reply = response.choices[0].message.content
+        print(f"✅ Groq jawab: {reply[:50]}")
+        return {"status": "success", "reply": reply}
 
     except Exception as e:
-        print(f"❌ ERROR DETAIL: {e}")
+        print(f"❌ ERROR: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/ai-analyze")
 async def analyze_stock(db: Session = Depends(get_db)):
-    if gemini is None:
-        raise HTTPException(status_code=500, detail="Gemini AI tidak tersedia")
+    if groq_client is None:
+        raise HTTPException(status_code=500, detail="Groq AI tidak tersedia")
 
     stockout_count = db.query(Product).filter(Product.stockout_risk == "Yes").count()
     total = db.query(Product).count()
 
-    prompt = f"""
-Saya punya data inventory dengan {total} produk, dan {stockout_count} diantaranya berisiko stockout.
-Berikan analisa singkat 2-3 kalimat dan rekomendasi tindakan sebagai asisten inventaris profesional.
-Jawab dalam Bahasa Indonesia.
-"""
-    response = gemini.generate_content(prompt)
-    return {"status": "success", "ai_suggestion": response.text}
+    response = groq_client.chat.completions.create(
+        model="llama-3.1-8b-instant",
+        messages=[
+            {"role": "system", "content": "Kamu asisten inventory profesional. Jawab dalam Bahasa Indonesia, singkat 2-3 kalimat."},
+            {"role": "user", "content": f"Saya punya {total} produk, {stockout_count} berisiko stockout. Beri analisa dan rekomendasi singkat."}
+        ],
+        max_tokens=200,
+        temperature=0.5,
+    )
 
-import pandas as pd
-
-# Tambahkan ini di bawah endpoint yang udah ada di main.py
-@app.get("/api/products")
-@app.get("/products") 
-async def get_all_products():
-    try:
-        import pandas as pd
-        df = pd.read_csv("data_stok.csv")
-        # Kirim semua data buat ditampilin di tabel page Products
-        return df.fillna("").to_dict(orient="records")
-    except Exception as e:
-        print("Error fetch products:", e)
-        return []
+    return {"status": "success", "ai_suggestion": response.choices[0].message.content}

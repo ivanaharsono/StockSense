@@ -15,11 +15,11 @@ const CustomTooltip = ({ active, payload, label }) => {
     <div
       style={{
         background: "#ffffff",
-        border: "1px solid #e2e8f0",
+        border: "1px solid rgba(240, 98, 146, 0.3)",
         borderRadius: 8,
         padding: "10px 14px",
         fontSize: 12,
-        boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+        boxShadow: "0 4px 12px rgba(240, 98, 146, 0.1)",
       }}
     >
       <p style={{ color: "#64748b", marginBottom: 6, fontWeight: 600 }}>{label}</p>
@@ -47,21 +47,42 @@ export default function Analytics() {
   const [error, setError]             = useState(null);
 
   useEffect(() => {
-    const BASE = "http://localhost:8000/api";
+    // Sesuaikan URL base dengan FastAPI lu
+    const BASE = "http://localhost:8000";
 
     Promise.all([
-      fetch(`${BASE}/stores`).then((r) => r.json()),
-      fetch(`${BASE}/store-data`).then((r) => r.json()),
-      fetch(`${BASE}/weather-risk`).then((r) => r.json()),
-      fetch(`${BASE}/suppliers`).then((r) => r.json()),
-      fetch(`${BASE}/trend`).then((r) => r.json()),
+      fetch(`${BASE}/analytics/stores`).then((r) => r.json()),
+      fetch(`${BASE}/analytics/weather`).then((r) => r.json()),
+      fetch(`${BASE}/analytics/suppliers`).then((r) => r.json()),
+      fetch(`${BASE}/dashboard/trend`).then((r) => r.json()),
     ])
-      .then(([storesRes, storeDataRes, weatherRes, suppliersRes, trendRes]) => {
-        setStores(storesRes);           // array of store keys, e.g. ["A","B","C","D"]
-        setStoreData(storeDataRes);     // { A: { promoD, noPromoD, avgDemand, avgStock, stockoutRate }, ... }
-        setWeatherData(weatherRes);     // [{ weather, high, medium, low }, ...]
-        setSuppliers(suppliersRes);     // [{ name, score }, ...]
-        setTrendData(trendRes);         // [{ date, stock, demand }, ...]
+      .then(([storesData, weatherRes, suppliersRes, trendRes]) => {
+        // 1. Ekstrak daftar Store ID ("S1", "S2", dst)
+        const storeIds = storesData.map(s => s.store_id);
+
+        // 2. Ubah array dari backend jadi Object yang diminta React
+        const storeObj = {};
+        storesData.forEach(s => {
+          storeObj[s.store_id] = {
+            promoD: s.promoD,
+            noPromoD: s.noPromoD,
+            avgDemand: s.avg_demand,
+            avgStock: s.avg_stock,
+            stockoutRate: s.stockout_rate
+          };
+        });
+
+        // 3. Format data supplier untuk progress bar
+        const formattedSuppliers = suppliersRes.map(sup => ({
+          name: sup.store_id, 
+          score: Math.round(sup.avg_reliability_score)
+        }));
+
+        setStores(storeIds);
+        setStoreData(storeObj);
+        setWeatherData(weatherRes);
+        setSuppliers(formattedSuppliers);
+        setTrendData(trendRes);
         setLoading(false);
       })
       .catch((err) => {
