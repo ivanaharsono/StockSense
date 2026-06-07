@@ -196,7 +196,7 @@ export default function Products() {
           {/* Download template */}
           <button
             className="btn btn-ghost"
-            onClick={() => window.open("http://localhost:8000/download-template", "_blank")}
+            onClick={() => window.open("https://ivanaharsono-stocksense-api.hf.space/download-template", "_blank")}
             style={{ display:"flex", alignItems:"center", gap:6, cursor:"pointer", border:"1px solid var(--border)", background:"#fff", color:"var(--text2)" }}
           >
             📋 Template
