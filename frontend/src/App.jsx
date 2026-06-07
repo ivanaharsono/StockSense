@@ -15,7 +15,7 @@ function Navbar() {
             <path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/>
           </svg>
         </div>
-        <span className="brand-name">StockSense</span>
+        <span className="brand-name">Stock Sense</span>
         <span className="brand-badge">AI</span>
       </div>
       <div className="navbar-links">
