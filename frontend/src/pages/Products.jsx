@@ -183,7 +183,7 @@ export default function Products() {
         <div>
           <h1>Products</h1>
           <p style={{ color:"var(--text2)" }}>
-            Inventory management — {filtered.length} items
+            Inventory management ({filtered.length}) items
             {extraColumns.length > 0 && (
               <span style={{ color:"var(--accent2)", fontWeight:600 }}>
                 {" · "}{extraColumns.length} kolom custom
@@ -338,7 +338,7 @@ export default function Products() {
         {/* Pagination */}
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"14px 24px", borderTop:"1px solid #e2e8f0", background:"#fff", borderRadius:"0 0 8px 8px" }}>
           <span style={{ fontSize:13, color:"#64748b" }}>
-            Showing {filtered.length === 0 ? 0 : (page-1)*PER_PAGE+1}–{Math.min(page*PER_PAGE, filtered.length)} of {filtered.length}
+            Showing {filtered.length === 0 ? 0 : (page-1)*PER_PAGE+1} – {Math.min(page*PER_PAGE, filtered.length)} of {filtered.length}
           </span>
           <div style={{ display:"flex", gap:8 }}>
             {[["← Prev", () => setPage((p)=>Math.max(1,p-1)), page===1],

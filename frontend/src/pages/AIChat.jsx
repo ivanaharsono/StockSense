@@ -260,7 +260,7 @@ export default function AIChat() {
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
             </button>
           </div>
-          <p style={{ fontSize:11, color:"var(--text3)", fontFamily:"var(--mono)", marginTop:8, textAlign:"center" }}>Terhubung ke FastAPI backend · Gemini AI 1.5 Flash</p>
+          <p style={{ fontSize:11, color:"var(--text3)", fontFamily:"var(--mono)", marginTop:8, textAlign:"center" }}>Terhubung ke FastAPI backend · Groq Llama 3.1</p>
         </div>
       </div>
     </div>
