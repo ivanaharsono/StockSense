@@ -145,7 +145,7 @@ export default function Dashboard() {
   );
   if (loading || !stats) return (
     <div className="page fade-up" style={{ display:'flex', justifyContent:'center', alignItems:'center', height:'80vh' }}>
-      <p style={{ color:'var(--accent2)' }}>Menyinkronkan data dengan PostgreSQL...</p>
+      <p style={{ color:'var(--text2)' }}>Menyinkronkan data...</p>
     </div>
   );
 
@@ -400,8 +400,8 @@ export default function Dashboard() {
                   </td>
                   <td style={{ textAlign:"center", fontFamily:"var(--mono)" }}>{p.daily_demand}</td>
                   <td style={{ textAlign:"center" }}>
-                    <span className={`badge badge-${p.stockout_risk.toLowerCase()}`}>
-                      {p.stockout_risk}
+                    <span className="badge badge-no">
+                      Safe
                     </span>
                   </td>
                 </tr>
