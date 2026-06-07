@@ -48,7 +48,7 @@ export default function Analytics() {
 
   useEffect(() => {
     // Sesuaikan URL base dengan FastAPI lu
-    const BASE = "http://localhost:8000";
+    const BASE = "https://ivanaharsono-stocksense-api.hf.space";
 
     Promise.all([
       fetch(`${BASE}/analytics/stores`).then((r) => r.json()),
