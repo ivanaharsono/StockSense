@@ -227,7 +227,7 @@ input[type="text"]:focus {
 }
 
 /* SCROLLBAR */
-::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: var(--bg); }
 ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
 ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
@@ -305,3 +305,19 @@ input[type="text"]:focus {
 
 /* Promo Active */
 .badge-accent { background: var(--accent3); color: var(--accent2); border: 1px solid #fbcfe8; }
+
+/* ─── TABLE WRAP (biar bisa scroll horizontal kalau kolom custom banyak) ──── */
+.table-wrap {
+  width: 100%;
+  overflow-x: auto;        /* tabel lebar tetap rapi, tinggal geser */
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ─── KOLOM CUSTOM (dari Excel) ──────────────────────────────────────────── */
+/* Garis pemisah halus + tint pink tipis biar kolom custom kebedain dari kolom standar */
+th.extra-col, td.extra-col {
+  border-left: 2px solid var(--accent3);
+}
+thead th.extra-col {
+  color: var(--accent2);   /* judul kolom custom warnanya pink biar jelas "tambahan" */
+}

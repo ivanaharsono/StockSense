@@ -1,4 +1,5 @@
 import os
+import json
 import joblib
 import io
 import pandas as pd
@@ -9,7 +10,7 @@ from typing import Optional
 
 from fastapi import FastAPI, Depends, HTTPException, Query, Response, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import create_engine, Column, Integer, String, Float, func
+from sqlalchemy import create_engine, Column, Integer, String, Float, Text, func, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 from pydantic import BaseModel
@@ -38,11 +39,27 @@ class Product(Base):
     promotion_active           = Column(String)
     weather_impact             = Column(String)
     stockout_risk              = Column(String)
+    extra_data                 = Column(Text)   # kolom custom dari Excel, disimpan sebagai JSON string
 
 Base.metadata.create_all(bind=engine)
 
+# Auto-migrate: tambah kolom extra_data kalau DB lama belum punya (aman dijalankan berkali-kali)
+try:
+    with engine.connect() as conn:
+        conn.execute(text("ALTER TABLE products ADD COLUMN IF NOT EXISTS extra_data TEXT"))
+        conn.commit()
+except Exception as e:
+    print(f"⚠️ Migrasi extra_data dilewati: {e}")
+
+# Kolom yang dianggap "standar" (dipakai AI & dashboard). Sisanya = kolom custom.
+STANDARD_COLS = {
+    "product_id", "date", "store_id", "current_stock", "daily_demand",
+    "lead_time_days", "supplier_reliability_score", "promotion_active",
+    "weather_impact", "stockout_risk",
+}
+
 # ─── App ──────────────────────────────────────────────────────────────────────
-app = FastAPI(title="StockSense API", version="1.0.0")
+app = FastAPI(title="StockSense API", version="1.1.0")
 
 # ─── Load ML Model ────────────────────────────────────────────────────────────
 try:
@@ -63,7 +80,7 @@ except Exception as e:
 # ─── CORS ─────────────────────────────────────────────────────────────────────
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],   # nanti ganti ke URL Railway frontend setelah deploy
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -105,7 +122,41 @@ class ChatRequest(BaseModel):
 # ─── Root ─────────────────────────────────────────────────────────────────────
 @app.get("/")
 def root():
-    return {"message": "StockSense API is running!", "version": "1.0.0"}
+    return {"message": "StockSense API is running!", "version": "1.1.0"}
+
+# ─── Helper konversi nilai dari Excel (tahan NaN & tipe numpy) ────────────────
+def safe_int(v, d=0):
+    try:
+        if pd.isna(v): return d
+        return int(float(v))
+    except Exception:
+        return d
+
+def safe_float(v, d=0.0):
+    try:
+        if pd.isna(v): return d
+        return float(v)
+    except Exception:
+        return d
+
+def safe_str(v, d=""):
+    try:
+        if pd.isna(v): return d
+        return str(v)
+    except Exception:
+        return d
+
+def clean_extra_value(v):
+    """Ubah nilai numpy/NaN jadi tipe Python biasa supaya bisa di-JSON-kan."""
+    if pd.isna(v):
+        return None
+    if isinstance(v, (np.integer,)):
+        return int(v)
+    if isinstance(v, (np.floating,)):
+        return float(v)
+    if isinstance(v, (np.bool_,)):
+        return bool(v)
+    return str(v)
 
 # ─── Helper functions (bukan endpoint) ────────────────────────────────────────
 def run_stockout_prediction(payload) -> str:
@@ -131,7 +182,17 @@ def run_stockout_prediction(payload) -> str:
 
 
 def product_to_dict(p: Product) -> dict:
+    # extra_data (JSON string) → dict; kolom custom dikirim NESTED supaya frontend tahu mana yang custom
+    extra = {}
+    if p.extra_data:
+        try:
+            parsed = json.loads(p.extra_data)
+            if isinstance(parsed, dict):
+                extra = parsed
+        except Exception:
+            extra = {}
     return {
+        "id":                         p.id,
         "product_id":                 p.product_id,
         "date":                       p.date,
         "store_id":                   p.store_id,
@@ -142,6 +203,7 @@ def product_to_dict(p: Product) -> dict:
         "promotion_active":           p.promotion_active,
         "weather_impact":             p.weather_impact,
         "stockout_risk":              p.stockout_risk,
+        "extra_data":                 extra,
     }
 
 # ─── PRODUCTS ─────────────────────────────────────────────────────────────────
@@ -168,7 +230,8 @@ def get_products(
         )
     total    = query.count()
     products = query.offset(skip).limit(limit).all()
-    return {"total": total, "skip": skip, "limit": limit, "data": products}
+    return {"total": total, "skip": skip, "limit": limit,
+            "data": [product_to_dict(p) for p in products]}
 
 
 @app.get("/products/{product_id}")
@@ -176,7 +239,7 @@ def get_product(product_id: str, db: Session = Depends(get_db)):
     product = db.query(Product).filter(Product.product_id == product_id).first()
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
-    return product
+    return product_to_dict(product)
 
 
 @app.post("/products")
@@ -190,6 +253,7 @@ def upsert_product(payload: ProductCreate, response: Response, db: Session = Dep
     existing       = db.query(Product).filter(Product.product_id == p_id).first()
 
     if existing:
+        # NOTE: extra_data SENGAJA tidak diutak-atik di sini supaya kolom custom tidak hilang saat update via form
         existing.store_id                   = payload.store_id
         existing.current_stock              = payload.current_stock
         existing.daily_demand               = payload.daily_demand
@@ -227,7 +291,7 @@ def update_product(product_id: str, payload: ProductUpdate, db: Session = Depend
         setattr(product, field, value)
     db.commit()
     db.refresh(product)
-    return product
+    return product_to_dict(product)
 
 
 @app.delete("/products/{product_id}")
@@ -238,6 +302,28 @@ def delete_product(product_id: str, db: Session = Depends(get_db)):
     db.delete(product)
     db.commit()
     return {"message": f"Product {product_id} deleted"}
+
+# ─── TEMPLATE DOWNLOAD ────────────────────────────────────────────────────────
+@app.get("/download-template")
+def download_template():
+    """Excel template kosong + 1 baris contoh. Kolom standar wajib; kolom lain bebas ditambah user."""
+    df = pd.DataFrame([{
+        "product_id": "P001", "date": "2024-01-01", "store_id": "S1",
+        "current_stock": 100, "daily_demand": 20, "lead_time_days": 3,
+        "supplier_reliability_score": 85.0, "promotion_active": "No",
+        "weather_impact": "Low", "stockout_risk": "No",
+        # contoh kolom custom (boleh dihapus / diganti sesuka user)
+        "kategori": "Minuman", "harga": 15000, "supplier_name": "PT Contoh",
+    }])
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name='Template')
+    output.seek(0)
+    headers = {"Content-Disposition": "attachment; filename=template_stocksense.xlsx"}
+    return StreamingResponse(
+        output, headers=headers,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
 
 # ─── UPLOAD & EXPORT ──────────────────────────────────────────────────────────
 @app.post("/upload-data")
@@ -251,22 +337,47 @@ async def upload_excel_csv(file: UploadFile = File(...), db: Session = Depends(g
         else:
             raise HTTPException(status_code=400, detail="Format harus .csv atau .xlsx")
 
+        # Wajib minimal punya product_id
+        if "product_id" not in df.columns:
+            raise HTTPException(status_code=400, detail="Kolom 'product_id' wajib ada di file.")
+
         db.query(Product).delete()
+
+        inserted = 0
         for _, row in df.iterrows():
+            row_dict = row.to_dict()
+
+            # Pisahkan kolom custom (yang BUKAN kolom standar)
+            extra = {}
+            for col, val in row_dict.items():
+                if col not in STANDARD_COLS:
+                    cleaned = clean_extra_value(val)
+                    if cleaned is not None:
+                        extra[str(col)] = cleaned
+
             db.add(Product(
-                product_id=str(row['product_id']),
-                date=str(row['date']),
-                store_id=str(row['store_id']),
-                current_stock=int(row['current_stock']),
-                daily_demand=int(row['daily_demand']),
-                lead_time_days=int(row['lead_time_days']),
-                supplier_reliability_score=float(row['supplier_reliability_score']),
-                promotion_active=str(row['promotion_active']),
-                weather_impact=str(row['weather_impact']),
-                stockout_risk=str(row['stockout_risk']),
+                product_id                 = safe_str(row_dict.get("product_id")),
+                date                       = safe_str(row_dict.get("date"), "2024-01-01"),
+                store_id                   = safe_str(row_dict.get("store_id"), "S1"),
+                current_stock              = safe_int(row_dict.get("current_stock")),
+                daily_demand               = safe_int(row_dict.get("daily_demand")),
+                lead_time_days             = safe_int(row_dict.get("lead_time_days"), 3),
+                supplier_reliability_score = safe_float(row_dict.get("supplier_reliability_score"), 80.0),
+                promotion_active           = safe_str(row_dict.get("promotion_active"), "No"),
+                weather_impact             = safe_str(row_dict.get("weather_impact"), "Low"),
+                stockout_risk              = safe_str(row_dict.get("stockout_risk"), "No"),
+                extra_data                 = json.dumps(extra, ensure_ascii=False) if extra else None,
             ))
+            inserted += 1
+
         db.commit()
-        return {"status": "success", "message": f"Berhasil memasukkan {len(df)} data produk!"}
+        extra_cols = [c for c in df.columns if c not in STANDARD_COLS]
+        msg = f"Berhasil memasukkan {inserted} data produk!"
+        if extra_cols:
+            msg += f" ({len(extra_cols)} kolom custom terdeteksi: {', '.join(extra_cols)})"
+        return {"status": "success", "message": msg, "custom_columns": extra_cols}
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -276,15 +387,22 @@ async def upload_excel_csv(file: UploadFile = File(...), db: Session = Depends(g
 def export_to_excel(filename: Optional[str] = Query(None), db: Session = Depends(get_db)):
     try:
         products = db.query(Product).order_by(Product.product_id).all()
-        data = [product_to_dict(p) for p in products]
-        df   = pd.DataFrame(data)
+
+        # Flatten: kolom custom dispread jadi kolom Excel biasa
+        rows = []
+        for p in products:
+            d = product_to_dict(p)
+            extra = d.pop("extra_data", {}) or {}
+            d.pop("id", None)
+            d.update(extra)
+            rows.append(d)
+        df = pd.DataFrame(rows)
 
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             df.to_excel(writer, index=False, sheet_name='Updated Inventory')
         output.seek(0)
 
-        # Nama file: ambil dari query param, tambah _updated
         if filename:
             base        = filename.rsplit('.', 1)[0]
             export_name = f"{base}_updated.xlsx"
