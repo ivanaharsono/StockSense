@@ -87,7 +87,7 @@ export default function Dashboard() {
     formData.append("file", file);
     setUploading(true);
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:8000"}/upload-data`, {
+      const response = await fetch(`https://ivanaharsono-stocksense-api.hf.space/upload-data`, {
         method: "POST", body: formData,
       });
       if (response.ok) {
@@ -191,7 +191,7 @@ export default function Dashboard() {
           <button
             onClick={() => {
               const fname = encodeURIComponent(uploadedFile || "stock");
-              window.open(`${import.meta.env.VITE_API_URL || "http://localhost:8000"}/export-data?filename=${fname}`, "_blank");
+              window.open(`https://ivanaharsono-stocksense-api.hf.space/export-data?filename=${fname}`, "_blank");
             }}
             style={{ background:'#10b981', color:'white', padding:'9px 16px', borderRadius:'8px', border:'none', cursor:'pointer', fontWeight:700, fontSize:13 }}
           >
