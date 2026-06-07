@@ -48,7 +48,7 @@ export default function Dashboard() {
   // ── Fetch dashboard ────────────────────────────────────────────────────────
   const fetchDashboardData = async () => {
     try {
-      setLoading(true);
+      if (!stats) setLoading(true);
       const [statsRes, trendRes, weatherRes] = await Promise.all([
         api.get("/dashboard/stats"),
         api.get("/dashboard/trend"),
