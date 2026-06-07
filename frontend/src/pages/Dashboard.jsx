@@ -145,7 +145,7 @@ export default function Dashboard() {
   );
   if (loading || !stats) return (
     <div className="page fade-up" style={{ display:'flex', justifyContent:'center', alignItems:'center', height:'80vh' }}>
-      <p style={{ color:'var(--text2)' }}>Menyinkronkan data...</p>
+      <p style={{ color:'var(--text2)' }}>Synchronizing data...</p>
     </div>
   );
 
@@ -399,10 +399,12 @@ export default function Dashboard() {
                     {p.current_stock}
                   </td>
                   <td style={{ textAlign:"center", fontFamily:"var(--mono)" }}>{p.daily_demand}</td>
-                  <td style={{ textAlign:"center" }}>
-                    <span className="badge badge-no">
-                      Safe
-                    </span>
+                    <td style={{ textAlign:"center" }}>
+                    {activeTab === "high" ? (
+                      <span className="badge badge-yes">High</span>
+                    ) : (
+                      <span className="badge badge-no">Safe</span>
+                    )}
                   </td>
                 </tr>
               ))}

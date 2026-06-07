@@ -92,7 +92,7 @@ export default function Analytics() {
       });
   }, []);
 
-  if (loading) return <p style={{ padding: 24 }}>Memuat analytics...</p>;
+  if (loading) return <p style={{ color:'var(--text2)' }}>Loading analytics...</p>;
   if (error)   return <p style={{ padding: 24, color: "#ef4444" }}>Error: {error}</p>;
 
   // ── DERIVED DATA ─────────────────────────────────────────────

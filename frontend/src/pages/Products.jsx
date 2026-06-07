@@ -172,7 +172,7 @@ export default function Products() {
   // total kolom buat colSpan "No products found"
   const totalColSpan = 9 + extraColumns.length;
 
-  if (loading) return <p style={{ padding:24 }}>Memuat produk...</p>;
+  if (loading) return <p style={{ color:'var(--text2)' }}>Loading products...</p>
   if (error)   return <p style={{ padding:24, color:"var(--red)" }}>Error: {error}</p>;
 
   return (
