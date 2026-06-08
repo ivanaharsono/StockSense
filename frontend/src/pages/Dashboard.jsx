@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import api, { getAiPrediction } from '../api';
+import { getWorkspaceId } from "../api";
 import {
   LineChart, Line, BarChart, Bar,
   XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
@@ -89,6 +90,7 @@ export default function Dashboard() {
     try {
       const response = await fetch(`https://ivanaharsono-stocksense-api.hf.space/upload-data`, {
         method: "POST", body: formData,
+        headers: { "X-Workspace-Id": getWorkspaceId() },
       });
       if (response.ok) {
         localStorage.setItem("lastUploadedExcel", file.name);
@@ -191,7 +193,7 @@ export default function Dashboard() {
           <button
             onClick={() => {
               const fname = encodeURIComponent(uploadedFile || "stock");
-              window.open(`https://ivanaharsono-stocksense-api.hf.space/export-data?filename=${fname}`, "_blank");
+              window.open(`https://ivanaharsono-stocksense-api.hf.space/export-data?filename=${fname}&ws=${getWorkspaceId()}`, "_blank");
             }}
             style={{ background:'#10b981', color:'white', padding:'9px 16px', borderRadius:'8px', border:'none', cursor:'pointer', fontWeight:700, fontSize:13 }}
           >

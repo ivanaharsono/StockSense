@@ -160,11 +160,6 @@ def clean_extra_value(v):
 
 # ─── Helper functions (bukan endpoint) ────────────────────────────────────────
 def run_stockout_prediction(payload) -> str:
-    # Rule-based safety net — override ML kalau kondisi jelas kritis
-    days_of_stock = payload.current_stock / (payload.daily_demand + 0.1)
-    if days_of_stock <= payload.lead_time_days:
-        return "Yes"  # stok tidak cukup sampai barang datang = pasti risk
-    
     if ml_model is None:
         return "No"
     try:

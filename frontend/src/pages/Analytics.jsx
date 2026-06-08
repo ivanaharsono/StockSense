@@ -1,13 +1,17 @@
 import { useState, useEffect } from "react";
+import { BASE, getWorkspaceId } from "../api";
 import {
   BarChart, Bar, LineChart, Line,
   XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from "recharts";
 
 // ── HELPERS ───────────────────────────────────────────────────
-
 const supplierColor = (score) =>
   score >= 80 ? "#10b981" : score >= 65 ? "#f59e0b" : "#ef4444";
+
+// fetch yang otomatis bawa workspace key
+const wsFetch = (path) =>
+  fetch(`${BASE}${path}`, { headers: { "X-Workspace-Id": getWorkspaceId() } }).then((r) => r.json());
 
 const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
@@ -33,11 +37,9 @@ const CustomTooltip = ({ active, payload, label }) => {
 };
 
 // ── MAIN COMPONENT ────────────────────────────────────────────
-
 export default function Analytics() {
   const [storeFilter, setStoreFilter] = useState("all");
 
-  // Masing-masing state untuk setiap endpoint
   const [stores, setStores]           = useState([]);
   const [storeData, setStoreData]     = useState({});
   const [weatherData, setWeatherData] = useState([]);
@@ -47,20 +49,15 @@ export default function Analytics() {
   const [error, setError]             = useState(null);
 
   useEffect(() => {
-    // Sesuaikan URL base dengan FastAPI lu
-    const BASE = "https://ivanaharsono-stocksense-api.hf.space";
-
     Promise.all([
-      fetch(`${BASE}/analytics/stores`).then((r) => r.json()),
-      fetch(`${BASE}/analytics/weather`).then((r) => r.json()),
-      fetch(`${BASE}/analytics/suppliers`).then((r) => r.json()),
-      fetch(`${BASE}/dashboard/trend`).then((r) => r.json()),
+      wsFetch("/analytics/stores"),
+      wsFetch("/analytics/weather"),
+      wsFetch("/analytics/suppliers"),
+      wsFetch("/dashboard/trend"),
     ])
       .then(([storesData, weatherRes, suppliersRes, trendRes]) => {
-        // 1. Ekstrak daftar Store ID ("S1", "S2", dst)
         const storeIds = storesData.map(s => s.store_id);
 
-        // 2. Ubah array dari backend jadi Object yang diminta React
         const storeObj = {};
         storesData.forEach(s => {
           storeObj[s.store_id] = {
@@ -72,9 +69,8 @@ export default function Analytics() {
           };
         });
 
-        // 3. Format data supplier untuk progress bar
         const formattedSuppliers = suppliersRes.map(sup => ({
-          name: sup.store_id, 
+          name: sup.store_id,
           score: Math.round(sup.avg_reliability_score)
         }));
 
@@ -92,11 +88,10 @@ export default function Analytics() {
       });
   }, []);
 
-  if (loading) return <p style={{ color:'var(--text2)' }}>Loading analytics...</p>;
+  if (loading) return <p style={{ padding: 24 }}>Memuat analytics...</p>;
   if (error)   return <p style={{ padding: 24, color: "#ef4444" }}>Error: {error}</p>;
 
   // ── DERIVED DATA ─────────────────────────────────────────────
-
   const filteredStores = storeFilter === "all" ? stores : [storeFilter];
 
   const promoChartData = filteredStores
@@ -109,18 +104,16 @@ export default function Analytics() {
 
   const storeTableData = filteredStores.map((s) => ({ store: s, ...storeData[s] }));
 
-  const avgDemand = Math.round(
+  const avgDemand = filteredStores.length ? Math.round(
     filteredStores.reduce((a, s) => a + (storeData[s]?.avgDemand ?? 0), 0) / filteredStores.length
-  );
-  const avgStockout = (
+  ) : 0;
+  const avgStockout = filteredStores.length ? (
     filteredStores.reduce((a, s) => a + (storeData[s]?.stockoutRate ?? 0), 0) / filteredStores.length
-  ).toFixed(1);
+  ).toFixed(1) : "0.0";
 
   // ── RENDER ────────────────────────────────────────────────────
-
   return (
     <div className="page fade-up">
-      {/* Header */}
       <div
         className="page-header"
         style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 32 }}
