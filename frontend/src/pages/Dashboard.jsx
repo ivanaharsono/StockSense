@@ -95,10 +95,10 @@ export default function Dashboard() {
       if (response.ok) {
         localStorage.setItem("lastUploadedExcel", file.name);
         setUploadedFile(file.name);
-        alert("🎉 Data berhasil di-upload!");
+        alert("🎉 Data uploaded successfully!");
         fetchDashboardData();
       } else {
-        alert("Gagal upload. Pastikan format kolom sesuai.");
+        alert("Upload failed. Check that the columns match.");
       }
     } catch (err) {
       alert("Error: " + err.message);
@@ -110,14 +110,14 @@ export default function Dashboard() {
 
   // ── AI Predict ─────────────────────────────────────────────────────────────
   const handleCheckAI = async () => {
-    if (!checkId.trim()) { alert("Masukkan Product ID dulu."); return; }
+    if (!checkId.trim()) { alert("Enter a Product ID first."); return; }
     setLoadingAi(true);
     setAiResult(null);
     try {
       const result = await getAiPrediction(checkId);
       setAiResult(result);
     } catch (err) {
-      alert("AI gagal ambil data. Cek apakah ID sudah benar?");
+      alert("AI couldn't fetch data. Is the ID correct?");
     } finally {
       setLoadingAi(false);
     }
@@ -125,7 +125,7 @@ export default function Dashboard() {
 
   // ── AI Retrain ─────────────────────────────────────────────────────────────
   const handleRetrain = async () => {
-    if (!window.confirm("Re-train AI dengan semua data saat ini?\nProses ini butuh beberapa detik.")) return;
+    if (!window.confirm("Re-train AI with all current data?\nThis takes a few seconds.")) return;
     setRetraining(true);
     setRetrainResult(null);
     try {
@@ -142,7 +142,7 @@ export default function Dashboard() {
   // ── Guards ─────────────────────────────────────────────────────────────────
   if (error) return (
     <div className="page fade-up" style={{ display:'flex', justifyContent:'center', alignItems:'center', height:'80vh' }}>
-      <p style={{ color:'var(--red)' }}>Gagal memuat data: {error}</p>
+      <p style={{ color:'var(--red)' }}>Failed to load data: {error}</p>
     </div>
   );
   if (loading || !stats) return (
@@ -185,7 +185,7 @@ export default function Dashboard() {
               borderRadius:8, padding:"7px 12px",
               fontSize:12, color:"#92400e", fontWeight:600,
             }}>
-              <span>⚠️</span><span>Belum ada data</span>
+              <span>⚠️</span><span>No data yet</span>
             </div>
           )}
 
@@ -204,7 +204,7 @@ export default function Dashboard() {
           <input type="file" accept=".csv,.xlsx" ref={fileInputRef} style={{ display:'none' }} onChange={handleFileUpload} />
           <button onClick={() => fileInputRef.current.click()} disabled={uploading}
             style={{ background:'var(--accent)', color:'white', padding:'9px 16px', borderRadius:'8px', border:'none', cursor: uploading ? 'wait' : 'pointer', fontWeight:700, fontSize:13, boxShadow:'0 4px 10px rgba(216,27,96,0.25)' }}>
-            {uploading ? "Memproses..." : "📂 Upload Data"}
+            {uploading ? "Processing..." : "📂 Upload Data"}
           </button>
         </div>
       </div>
@@ -311,7 +311,7 @@ export default function Dashboard() {
                   ✅ {retrainResult.data.message}
                 </p>
                 <p style={{ fontSize:12, color:"#64748b", margin:0 }}>
-                  Akurasi baru: <strong style={{ color:"#7c3aed" }}>{retrainResult.data.accuracy}</strong>
+                  New accuracy:: <strong style={{ color:"#7c3aed" }}>{retrainResult.data.accuracy}</strong>
                   &nbsp;·&nbsp; Training: {retrainResult.data.training_data} data
                   &nbsp;·&nbsp; Test: {retrainResult.data.test_data} data
                 </p>

@@ -79,7 +79,7 @@ export default function Analytics() {
 
   if (loading) return (
     <div className="page fade-up" style={{ display:'flex', justifyContent:'center', alignItems:'center', height:'80vh' }}>
-      <p style={{ color:'var(--text2)' }}>Memuat analytics...</p>
+      <p style={{ color:'var(--text2)' }}>Loading analytics...</p>
     </div>
   );
   if (error) return (

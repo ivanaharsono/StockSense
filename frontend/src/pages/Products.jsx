@@ -85,10 +85,10 @@ export default function Products() {
 
   const handleSaveProduct = async () => {
     if (!newProd.product_id.trim()) {
-      setSaveMsg({ type:"error", text:"Product ID wajib diisi." }); return;
+      setSaveMsg({ type:"error", text:"Product ID is required." }); return;
     }
     if (!newProd.current_stock || !newProd.daily_demand) {
-      setSaveMsg({ type:"error", text:"Stock dan Daily Demand wajib diisi." }); return;
+      setSaveMsg({ type:"error", text:"Stock and Daily Demand are required." }); return;
     }
     setSaving(true); setSaveMsg(null);
 
@@ -194,7 +194,7 @@ export default function Products() {
             Inventory management ({filtered.length}) items
             {extraColumns.length > 0 && (
               <span style={{ color:"var(--accent2)", fontWeight:600 }}>
-                {" · "}{extraColumns.length} kolom custom
+                {" · "}{extraColumns.length} custom columns
               </span>
             )}
           </p>
@@ -375,7 +375,7 @@ export default function Products() {
               <div>
                 <h3 style={{ margin:0, color:"#0f172a", fontSize:18, fontWeight:700 }}>Add / Update Product</h3>
                 <p style={{ margin:"4px 0 0", fontSize:12, color:"#64748b" }}>
-                  ID sudah ada → data diperbarui otomatis
+                  If ID exists → data updates automatically
                 </p>
               </div>
               <button onClick={() => { setShowModal(false); setNewProd(EMPTY_PROD); setSaveMsg(null); }}
@@ -385,7 +385,7 @@ export default function Products() {
             <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
               <FieldLabel>Product ID *</FieldLabel>
               <input
-                style={inputStyle} placeholder="cth: P999"
+                style={inputStyle} placeholder="e.g. P999"
                 value={newProd.product_id}
                 onChange={(e) => setNewProd((p) => ({ ...p, product_id: e.target.value.toUpperCase() }))}
               />
@@ -394,7 +394,7 @@ export default function Products() {
             <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
               <FieldLabel>Store ID</FieldLabel>
               <input
-                style={inputStyle} placeholder="cth: S101"
+                style={inputStyle} placeholder="e.g. S101"
                 value={newProd.store_id}
                 onChange={(e) => setNewProd((p) => ({ ...p, store_id: e.target.value.toUpperCase() }))}
               />
@@ -403,17 +403,17 @@ export default function Products() {
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
               <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
                 <FieldLabel>Current Stock *</FieldLabel>
-                <input type="number" min="0" style={inputStyle} placeholder="cth: 200" value={newProd.current_stock} onChange={set("current_stock")} />
+                <input type="number" min="0" style={inputStyle} placeholder="e.g. 200" value={newProd.current_stock} onChange={set("current_stock")} />
               </div>
               <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
                 <FieldLabel>Daily Demand *</FieldLabel>
-                <input type="number" min="0" style={inputStyle} placeholder="cth: 50" value={newProd.daily_demand} onChange={set("daily_demand")} />
+                <input type="number" min="0" style={inputStyle} placeholder="e.g. 50" value={newProd.daily_demand} onChange={set("daily_demand")} />
               </div>
             </div>
 
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
               <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
-                <FieldLabel>Lead Time (hari)</FieldLabel>
+                <FieldLabel>Lead Time (days)</FieldLabel>
                 <input type="number" min="1" style={inputStyle} placeholder="3" value={newProd.lead_time_days} onChange={set("lead_time_days")} />
               </div>
               <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
@@ -424,7 +424,7 @@ export default function Products() {
 
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
               <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
-                <FieldLabel>Promosi</FieldLabel>
+                <FieldLabel>Promotion</FieldLabel>
                 <select style={inputStyle} value={newProd.promotion_active} onChange={set("promotion_active")}>
                   <option value="No">No</option>
                   <option value="Yes">Yes</option>
@@ -459,13 +459,13 @@ export default function Products() {
                   background: saving ? "#94a3b8" : "var(--accent)", color:"white", transition:"background 0.2s",
                 }}
               >
-                {saving ? "Menyimpan..." : "💾 Save"}
+                {saving ? "Saving..." : "💾 Save"}
               </button>
               <button
                 onClick={() => { setShowModal(false); setNewProd(EMPTY_PROD); setSaveMsg(null); }}
                 style={{ padding:"11px", borderRadius:8, border:"1.5px solid #e2e8f0", fontWeight:700, fontSize:14, cursor:"pointer", background:"#f8fafc", color:"#64748b" }}
               >
-                Batal
+                Cancel
               </button>
             </div>
 
