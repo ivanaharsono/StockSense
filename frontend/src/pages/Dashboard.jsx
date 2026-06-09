@@ -397,6 +397,19 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {pendingFile && (
+        <ColumnMapper
+          file={pendingFile}
+          onClose={() => setPendingFile(null)}
+          onDone={(fileName) => {
+            setPendingFile(null);
+            localStorage.setItem("lastUploadedExcel", fileName);
+            setUploadedFile(fileName);
+            fetchDashboardData();
+          }}
+        />
+      )}
+
     </div>
   );
 }
