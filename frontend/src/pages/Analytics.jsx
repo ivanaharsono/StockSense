@@ -176,6 +176,8 @@ export default function Analytics() {
             <div className="legend-item"><span className="legend-dot" style={{ background: "#7c6af7" }} />Promo aktif</div>
             <div className="legend-item"><span className="legend-dot" style={{ background: "#e2e8f0", border: "1px solid #7c6af7" }} />No promo</div>
           </div>
+          <div style={{ overflowX: "auto" }}>
+          <div style={{ minWidth: Math.max(promoChartData.length * 64, 300) }}>
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={promoChartData} barGap={4}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
@@ -186,6 +188,8 @@ export default function Analytics() {
               <Bar dataKey="noPromo" name="No promo"    fill="#f1f5f9" stroke="#7c6af7" strokeWidth={1} radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
+          </div>
+          </div>
         </div>
 
         <div className="chart-card">
@@ -217,8 +221,8 @@ export default function Analytics() {
           <p style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
             Peringkat performa supplier. Skor tinggi berarti supplier jarang telat dan kirimannya selalu baik.
           </p>
-          <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 16 }}>
-            {relevantSuppliers.map((s) => (
+          <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 16, maxHeight: 240, overflowY: "auto", paddingRight: 8 }}>
+            {[...relevantSuppliers].sort((a, b) => a.score - b.score).map((s) => (
               <div key={s.name} style={{ display: "flex", alignItems: "center", gap: 12 }}>
                 <span style={{ fontSize: 12, color: "#64748b", width: 80, fontWeight: 500 }}>Store {s.name}</span>
                 <div style={{ flex: 1, height: 8, background: "#f1f5f9", borderRadius: 4, overflow: "hidden" }}>
