@@ -90,17 +90,16 @@ export default function Analytics() {
 
   // ── DERIVED DATA (semua dihitung dari data real) ─────────────
   const filteredStores = storeFilter === "all" ? stores : [storeFilter];
+  const sortedStores = [...filteredStores].sort((a, b) =>
+    String(a).localeCompare(String(b), undefined, { numeric: true }));
 
-  const promoChartData = filteredStores
-    .sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }))
-    .map((s) => ({
-      store: `Store ${s}`,
-      promo:   storeData[s]?.promoD   ?? 0,
-      noPromo: storeData[s]?.noPromoD ?? 0,
-    }));
+  const promoChartData = sortedStores.map((s) => ({
+    store: `Store ${s}`,
+    promo:   storeData[s]?.promoD   ?? 0,
+    noPromo: storeData[s]?.noPromoD ?? 0,
+  }));
 
   const storeTableData = filteredStores.map((s) => ({ store: s, ...storeData[s] }));
-
   const n = filteredStores.length || 1;
 
   const avgDemand = Math.round(
@@ -110,18 +109,19 @@ export default function Analytics() {
     filteredStores.reduce((a, s) => a + (storeData[s]?.stockoutRate ?? 0), 0) / n
   ).toFixed(1);
 
-  // Promo uplift REAL: rata-rata demand saat promo vs tanpa promo
   const totalPromo   = filteredStores.reduce((a, s) => a + (storeData[s]?.promoD   ?? 0), 0);
   const totalNoPromo = filteredStores.reduce((a, s) => a + (storeData[s]?.noPromoD ?? 0), 0);
   const promoUplift  = totalNoPromo > 0
     ? Math.round(((totalPromo - totalNoPromo) / totalNoPromo) * 100)
     : 0;
 
-  // Avg lead time REAL dari data supplier
   const relevantSuppliers = suppliers.filter(s => filteredStores.includes(s.name));
   const avgLeadTime = relevantSuppliers.length
     ? (relevantSuppliers.reduce((a, s) => a + (s.leadTime ?? 0), 0) / relevantSuppliers.length).toFixed(1)
     : "0.0";
+
+  // lebar minimum promo chart biar batang gak gepeng (scroll horizontal kalau store banyak)
+  const promoMinWidth = Math.max(promoChartData.length * 70, 400);
 
   // ── RENDER ────────────────────────────────────────────────────
   return (
@@ -165,33 +165,34 @@ export default function Analytics() {
         </div>
       </div>
 
-      {/* Row 1 */}
-      <div className="grid-2" style={{ marginBottom: 24 }}>
-        <div className="chart-card">
-          <div className="chart-title">Demand: Promo vs No Promo</div>
-          <p style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
-            Membandingkan lonjakan permintaan saat ada promo (batang penuh) vs hari biasa (batang transparan).
-          </p>
-          <div className="chart-legend">
-            <div className="legend-item"><span className="legend-dot" style={{ background: "#7c6af7" }} />Promo aktif</div>
-            <div className="legend-item"><span className="legend-dot" style={{ background: "#e2e8f0", border: "1px solid #7c6af7" }} />No promo</div>
-          </div>
-          <div style={{ overflowX: "auto" }}>
-          <div style={{ minWidth: Math.max(promoChartData.length * 64, 300) }}>
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={promoChartData} barGap={4}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-              <XAxis dataKey="store" tick={{ fill: "#64748b", fontSize: 11 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: "#64748b", fontSize: 11 }} axisLine={false} tickLine={false} />
-              <Tooltip content={<CustomTooltip />} cursor={{ fill: "#f8fafc" }} />
-              <Bar dataKey="promo"   name="Promo aktif" fill="#7c6af7" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="noPromo" name="No promo"    fill="#f1f5f9" stroke="#7c6af7" strokeWidth={1} radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-          </div>
+      {/* Promo chart — FULL WIDTH, scroll horizontal di dalam */}
+      <div className="chart-card" style={{ marginBottom: 24 }}>
+        <div className="chart-title">Demand: Promo vs No Promo</div>
+        <p style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
+          Membandingkan lonjakan permintaan saat ada promo (batang penuh) vs hari biasa (batang transparan).
+        </p>
+        <div className="chart-legend">
+          <div className="legend-item"><span className="legend-dot" style={{ background: "#7c6af7" }} />Promo aktif</div>
+          <div className="legend-item"><span className="legend-dot" style={{ background: "#e2e8f0", border: "1px solid #7c6af7" }} />No promo</div>
+        </div>
+        <div style={{ overflowX: "auto", overflowY: "hidden", paddingBottom: 4 }}>
+          <div style={{ minWidth: promoMinWidth, height: 240 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={promoChartData} barGap={4} margin={{ top: 16, right: 8, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                <XAxis dataKey="store" tick={{ fill: "#64748b", fontSize: 11 }} axisLine={false} tickLine={false} interval={0} angle={-30} textAnchor="end" height={50} />
+                <YAxis tick={{ fill: "#64748b", fontSize: 11 }} axisLine={false} tickLine={false} />
+                <Tooltip content={<CustomTooltip />} cursor={{ fill: "#f8fafc" }} />
+                <Bar dataKey="promo"   name="Promo aktif" fill="#7c6af7" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="noPromo" name="No promo"    fill="#f1f5f9" stroke="#7c6af7" strokeWidth={1} radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
           </div>
         </div>
+      </div>
 
+      {/* Row: Weather | Stok vs Demand */}
+      <div className="grid-2" style={{ marginBottom: 24 }}>
         <div className="chart-card">
           <div className="chart-title">Stockout Risk vs Weather Impact</div>
           <p style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
@@ -212,27 +213,6 @@ export default function Analytics() {
             </BarChart>
           </ResponsiveContainer>
         </div>
-      </div>
-
-      {/* Row 2 */}
-      <div className="grid-2" style={{ marginBottom: 24 }}>
-        <div className="chart-card">
-          <div className="chart-title">Supplier Reliability Score</div>
-          <p style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
-            Peringkat performa supplier. Skor tinggi berarti supplier jarang telat dan kirimannya selalu baik.
-          </p>
-          <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 16, maxHeight: 240, overflowY: "auto", paddingRight: 8 }}>
-            {[...relevantSuppliers].sort((a, b) => a.score - b.score).map((s) => (
-              <div key={s.name} style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <span style={{ fontSize: 12, color: "#64748b", width: 80, fontWeight: 500 }}>Store {s.name}</span>
-                <div style={{ flex: 1, height: 8, background: "#f1f5f9", borderRadius: 4, overflow: "hidden" }}>
-                  <div style={{ height: "100%", width: `${s.score}%`, background: supplierColor(s.score), borderRadius: 4, transition: "width 0.6s ease" }} />
-                </div>
-                <span style={{ fontSize: 12, color: supplierColor(s.score), width: 30, fontWeight: 700 }}>{s.score}</span>
-              </div>
-            ))}
-          </div>
-        </div>
 
         <div className="chart-card">
           <div className="chart-title">Stok vs Demand Harian</div>
@@ -250,10 +230,29 @@ export default function Analytics() {
               <YAxis tick={{ fill: "#64748b", fontSize: 11 }} axisLine={false} tickLine={false}
                 tickFormatter={(v) => (v >= 1000 ? `${Math.round(v / 1000)}k` : v)} />
               <Tooltip content={<CustomTooltip />} />
-              <Line type="monotone" dataKey="stock"  name="Stok"   stroke="#7c6af7" strokeWidth={3} dot={{ r: 4, fill: "#7c6af7" }} activeDot={{ r: 6 }} />
-              <Line type="monotone" dataKey="demand" name="Demand" stroke="#10b981" strokeWidth={3} strokeDasharray="6 6" dot={{ r: 4, fill: "#10b981" }} />
+              <Line type="monotone" dataKey="stock"  name="Stok"   stroke="#7c6af7" strokeWidth={3} dot={{ r: 3, fill: "#7c6af7" }} activeDot={{ r: 6 }} />
+              <Line type="monotone" dataKey="demand" name="Demand" stroke="#10b981" strokeWidth={3} strokeDasharray="6 6" dot={{ r: 3, fill: "#10b981" }} />
             </LineChart>
           </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* Supplier reliability — FULL WIDTH, scroll vertikal, urut terburuk dulu */}
+      <div className="chart-card" style={{ marginBottom: 24 }}>
+        <div className="chart-title">Supplier Reliability Score</div>
+        <p style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
+          Diurut dari skor terendah. Skor tinggi = supplier jarang telat & kirimannya selalu baik.
+        </p>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 16, maxHeight: 260, overflowY: "auto", paddingRight: 8 }}>
+          {[...relevantSuppliers].sort((a, b) => a.score - b.score).map((s) => (
+            <div key={s.name} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <span style={{ fontSize: 12, color: "#64748b", width: 80, fontWeight: 500, flexShrink: 0 }}>Store {s.name}</span>
+              <div style={{ flex: 1, height: 8, background: "#f1f5f9", borderRadius: 4, overflow: "hidden" }}>
+                <div style={{ height: "100%", width: `${s.score}%`, background: supplierColor(s.score), borderRadius: 4, transition: "width 0.6s ease" }} />
+              </div>
+              <span style={{ fontSize: 12, color: supplierColor(s.score), width: 30, fontWeight: 700, flexShrink: 0 }}>{s.score}</span>
+            </div>
+          ))}
         </div>
       </div>
 
