@@ -77,7 +77,7 @@ export default function Login({ onSuccess }) {
 
         <div style={{ marginBottom: 20 }}>
           <label style={label}>Password</label>
-          <input style={field} type="password" value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={handleKey} placeholder="••••••••" />
+          <input style={field} type="password" value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={handleKey} placeholder="Enter your password" />
         </div>
 
         {error && (
