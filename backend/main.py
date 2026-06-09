@@ -9,7 +9,7 @@ from datetime import date, datetime, timedelta
 from dotenv import load_dotenv
 from typing import Optional
 
-from fastapi import FastAPI, Depends, HTTPException, Query, Response, File, UploadFile, Header
+from fastapi import FastAPI, Depends, HTTPException, Query, Response, File, UploadFile, Header, Form
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import create_engine, Column, Integer, String, Float, Text, func, text
 from sqlalchemy.ext.declarative import declarative_base
@@ -678,3 +678,167 @@ async def chat_with_ai(request: ChatRequest, db: Session = Depends(get_db), ws: 
         return {"status": "success", "reply": response.choices[0].message.content}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+        # ════════════════════════════════════════════════════════════════════════════
+#  SMART UPLOAD — AI-assisted column mapping
+#  Tempel blok ini di PALING BAWAH main.py.
+#  Catatan: tambahkan `Form` ke import fastapi di atas, jadi:
+#  from fastapi import FastAPI, Depends, HTTPException, Query, Response, File, UploadFile, Header, Form
+# ════════════════════════════════════════════════════════════════════════════
+
+TARGET_FIELDS = ["product_id", "store_id", "current_stock", "daily_demand",
+                 "lead_time_days", "supplier_reliability_score"]
+
+FIELD_ALIASES = {
+    "product_id": ["product_id", "product id", "sku", "item id", "item_id", "kode", "id produk"],
+    "store_id": ["store_id", "store", "branch", "cabang", "outlet", "toko", "warehouse", "gudang", "location", "lokasi"],
+    "current_stock": ["current_stock", "stock quantity", "stock_quantity", "stock", "stok", "qty", "quantity", "inventory", "on hand", "jumlah"],
+    "daily_demand": ["daily_demand", "demand", "sales", "sold", "quantity sold", "penjualan", "terjual", "permintaan"],
+    "lead_time_days": ["lead_time_days", "lead time", "lead_time", "delivery time", "waktu kirim", "leadtime"],
+    "supplier_reliability_score": ["supplier_reliability_score", "supplier score", "supplier", "reliability", "vendor", "skor supplier"],
+}
+
+def _read_upload(filename, contents):
+    if filename.endswith(".csv"):
+        return pd.read_csv(io.BytesIO(contents))
+    if filename.endswith((".xls", ".xlsx")):
+        return pd.read_excel(io.BytesIO(contents))
+    raise HTTPException(status_code=400, detail="Format harus .csv atau .xlsx")
+
+def heuristic_map(columns):
+    """Nebak mapping dari kemiripan nama kolom (fallback / cadangan)."""
+    mapping, used = {}, set()
+    for field in TARGET_FIELDS:
+        found = None
+        for alias in FIELD_ALIASES[field]:
+            for c in columns:
+                if c in used:
+                    continue
+                cl = c.lower().strip()
+                if alias == cl or alias in cl:
+                    found = c
+                    break
+            if found:
+                break
+        if found:
+            used.add(found)
+        mapping[field] = found
+    return mapping
+
+def ai_map(columns, sample_rows):
+    """Minta Groq nebak mapping. Kalau gagal, return None (nanti pakai heuristik)."""
+    if groq_client is None:
+        return None
+    try:
+        prompt = (
+            "You map spreadsheet columns to inventory database fields. "
+            f"Available columns: {columns}. "
+            f"Sample rows: {json.dumps(sample_rows)[:1200]}. "
+            f"Target fields: {TARGET_FIELDS}. "
+            "Return ONLY a JSON object mapping each target field to the best matching "
+            "column name from the available columns, or null if none fits. JSON only, no explanation."
+        )
+        resp = groq_client.chat.completions.create(
+            model="llama-3.1-8b-instant",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=300, temperature=0,
+        )
+        raw = resp.choices[0].message.content.strip()
+        raw = raw[raw.find("{"): raw.rfind("}") + 1]
+        parsed = json.loads(raw)
+        clean = {}
+        for f in TARGET_FIELDS:
+            v = parsed.get(f)
+            clean[f] = v if v in columns else None
+        return clean
+    except Exception as e:
+        print(f"⚠️ AI map gagal, pakai heuristik: {e}")
+        return None
+
+def compute_risk(stock, demand, lead, supplier, promo, weather, ws):
+    days = stock / (demand + 0.1)
+    if days <= lead:
+        return "Yes"
+    model = get_model_for(ws)
+    if model is None:
+        return "No"
+    try:
+        pm = {"Yes": 1, "No": 0}; wm = {"Low": 0, "Medium": 1, "High": 2}
+        X = pd.DataFrame([{
+            "current_stock": stock, "daily_demand": demand, "lead_time_days": lead,
+            "supplier_reliability_score": supplier,
+            "promotion_active": pm.get(promo, 0), "weather_impact": wm.get(weather, 0),
+            "days_of_stock": days,
+        }])
+        return "Yes" if model.predict(X)[0] == 1 else "No"
+    except Exception:
+        return "No"
+
+@app.post("/upload/analyze")
+async def upload_analyze(file: UploadFile = File(...), ws: str = Depends(get_workspace)):
+    """Baca header + contoh baris, kembalikan tebakan mapping (AI → fallback heuristik)."""
+    contents = await file.read()
+    df = _read_upload(file.filename, contents)
+    columns = [str(c) for c in df.columns]
+    sample_rows = json.loads(df.head(3).astype(str).to_json(orient="records"))
+    mapping = ai_map(columns, sample_rows) or heuristic_map(columns)
+    return {"columns": columns, "sample_rows": sample_rows, "suggested_mapping": mapping}
+
+@app.post("/upload/confirm")
+async def upload_confirm(file: UploadFile = File(...), mapping: str = Form(...),
+                         db: Session = Depends(get_db), ws: str = Depends(get_workspace)):
+    """Masukkan data pakai mapping yang sudah dikonfirmasi user."""
+    try:
+        m = json.loads(mapping)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Mapping tidak valid.")
+    if not m.get("product_id"):
+        raise HTTPException(status_code=400, detail="Kolom Product ID wajib dipetakan.")
+
+    contents = await file.read()
+    df = _read_upload(file.filename, contents)
+    mapped_sources = {v for v in m.values() if v}
+
+    db.query(Product).filter(Product.workspace_id == ws).delete()
+
+    inserted = 0
+    for _, row in df.iterrows():
+        rd = row.to_dict()
+
+        def g(field, default, conv):
+            col = m.get(field)
+            if col and col in rd:
+                return conv(rd[col], default)
+            return default
+
+        pid = safe_str(rd.get(m["product_id"])).upper().strip()
+        if not pid:
+            continue
+        stock    = g("current_stock", 0, safe_int)
+        demand   = g("daily_demand", 0, safe_int)
+        lead     = g("lead_time_days", 3, safe_int)
+        supplier = g("supplier_reliability_score", 80.0, safe_float)
+        store    = g("store_id", "S1", safe_str)
+
+        extra = {}
+        for col, val in rd.items():
+            if col not in mapped_sources:
+                cv = clean_extra_value(val)
+                if cv is not None:
+                    extra[str(col)] = cv
+
+        risk = compute_risk(stock, demand, lead, supplier, "No", "Low", ws)
+        db.add(Product(
+            workspace_id=ws, product_id=pid, date="2024-01-01", store_id=store,
+            current_stock=stock, daily_demand=demand, lead_time_days=lead,
+            supplier_reliability_score=supplier, promotion_active="No",
+            weather_impact="Low", stockout_risk=risk,
+            extra_data=json.dumps(extra, ensure_ascii=False) if extra else None,
+        ))
+        inserted += 1
+
+    db.commit()
+    unmapped = [str(c) for c in df.columns if c not in mapped_sources]
+    return {"status": "success", "inserted": inserted,
+            "message": f"Imported {inserted} products successfully.",
+            "extra_columns": unmapped}

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import api, { getAiPrediction } from '../api';
 import { getWorkspaceId } from "../api";
+import ColumnMapper from "./ColumnMapper";
 import {
   LineChart, Line, BarChart, Bar,
   XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
@@ -29,6 +30,7 @@ export default function Dashboard() {
   const [loading, setLoading]         = useState(true);
   const [error, setError]             = useState(null);
   const [activeTab, setActiveTab]     = useState('high');
+  const [pendingFile, setPendingFile] = useState(null);
 
   // AI Predict
   const [aiResult, setAiResult]   = useState(null);
@@ -81,31 +83,11 @@ export default function Dashboard() {
   }, []);
 
   // ── Upload file ────────────────────────────────────────────────────────────
-  const handleFileUpload = async (event) => {
+  const handleFileUpload = (event) => {
     const file = event.target.files[0];
     if (!file) return;
-    const formData = new FormData();
-    formData.append("file", file);
-    setUploading(true);
-    try {
-      const response = await fetch(`https://ivanaharsono-stocksense-api.hf.space/upload-data`, {
-        method: "POST", body: formData,
-        headers: { "X-Workspace-Id": getWorkspaceId() },
-      });
-      if (response.ok) {
-        localStorage.setItem("lastUploadedExcel", file.name);
-        setUploadedFile(file.name);
-        alert("🎉 Data uploaded successfully!");
-        fetchDashboardData();
-      } else {
-        alert("Upload failed. Check that the columns match.");
-      }
-    } catch (err) {
-      alert("Error: " + err.message);
-    } finally {
-      setUploading(false);
-      fileInputRef.current.value = null;
-    }
+    setPendingFile(file);
+    fileInputRef.current.value = null;
   };
 
   // ── AI Predict ─────────────────────────────────────────────────────────────
