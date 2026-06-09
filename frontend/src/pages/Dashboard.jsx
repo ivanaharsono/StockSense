@@ -203,7 +203,7 @@ export default function Dashboard() {
           {/* Upload */}
           <input type="file" accept=".csv,.xlsx" ref={fileInputRef} style={{ display:'none' }} onChange={handleFileUpload} />
           <button onClick={() => fileInputRef.current.click()} disabled={uploading}
-            style={{ background:'var(--accent2,#d81b60)', color:'white', padding:'9px 16px', borderRadius:'8px', border:'none', cursor: uploading ? 'wait' : 'pointer', fontWeight:700, fontSize:13, boxShadow:'0 4px 10px rgba(216,27,96,0.25)' }}>
+            style={{ background:'var(--accent)', color:'white', padding:'9px 16px', borderRadius:'8px', border:'none', cursor: uploading ? 'wait' : 'pointer', fontWeight:700, fontSize:13, boxShadow:'0 4px 10px rgba(216,27,96,0.25)' }}>
             {uploading ? "Memproses..." : "📂 Upload Data"}
           </button>
         </div>

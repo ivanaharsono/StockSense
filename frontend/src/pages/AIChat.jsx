@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-
-const API = "https://ivanaharsono-stocksense-api.hf.space";
+import { BASE, getWorkspaceId } from "../api";
 
 function AvatarIcon() {
   return (
@@ -53,9 +52,12 @@ export default function AIChat() {
     setInput("");
     setLoading(true);
     try {
-      const res  = await fetch(`${API}/api/chat`, {
+      const res  = await fetch(`${BASE}/api/chat`, {
         method: "POST",
-        headers: { "Content-Type":"application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "X-Workspace-Id": getWorkspaceId(),
+        },
         body: JSON.stringify({ message: text }),
       });
       const data = await res.json();
@@ -108,7 +110,6 @@ export default function AIChat() {
       {/* ── Messages ── */}
       <div style={{ flex:1, overflowY:"auto", padding:"24px", display:"flex", flexDirection:"column", gap:16 }}>
 
-        {/* Welcome */}
         {messages.length === 0 && (
           <div style={{ display:"flex", gap:12, alignItems:"flex-start" }}>
             <AvatarIcon />
@@ -135,7 +136,6 @@ export default function AIChat() {
           </div>
         )}
 
-        {/* Chat messages */}
         {messages.map((m, i) => (
           m.type === "user" ? (
             <div key={i} style={{ display:"flex", justifyContent:"flex-end" }}>

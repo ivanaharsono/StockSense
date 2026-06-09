@@ -172,8 +172,16 @@ export default function Products() {
   // total kolom buat colSpan "No products found"
   const totalColSpan = 9 + extraColumns.length;
 
-  if (loading) return <p style={{ color:'var(--text2)' }}>Loading products...</p>
-  if (error)   return <p style={{ padding:24, color:"var(--red)" }}>Error: {error}</p>;
+  if (loading) return (
+  <div className="page fade-up" style={{ display:'flex', justifyContent:'center', alignItems:'center', height:'80vh' }}>
+    <p style={{ color:'var(--text2)' }}>Memuat produk...</p>
+  </div>
+);
+  if (error) return (
+  <div className="page fade-up" style={{ display:'flex', justifyContent:'center', alignItems:'center', height:'80vh' }}>
+    <p style={{ color:'var(--red)' }}>Error: {error}</p>
+  </div>
+);
 
   return (
     <div className="page fade-up">

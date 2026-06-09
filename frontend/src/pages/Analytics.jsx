@@ -9,23 +9,17 @@ import {
 const supplierColor = (score) =>
   score >= 80 ? "#10b981" : score >= 65 ? "#f59e0b" : "#ef4444";
 
-// fetch yang otomatis bawa workspace key
 const wsFetch = (path) =>
   fetch(`${BASE}${path}`, { headers: { "X-Workspace-Id": getWorkspaceId() } }).then((r) => r.json());
 
 const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
   return (
-    <div
-      style={{
-        background: "#ffffff",
-        border: "1px solid rgba(240, 98, 146, 0.3)",
-        borderRadius: 8,
-        padding: "10px 14px",
-        fontSize: 12,
-        boxShadow: "0 4px 12px rgba(240, 98, 146, 0.1)",
-      }}
-    >
+    <div style={{
+      background: "#ffffff", border: "1px solid rgba(240, 98, 146, 0.3)",
+      borderRadius: 8, padding: "10px 14px", fontSize: 12,
+      boxShadow: "0 4px 12px rgba(240, 98, 146, 0.1)",
+    }}>
       <p style={{ color: "#64748b", marginBottom: 6, fontWeight: 600 }}>{label}</p>
       {payload.map((p, i) => (
         <p key={i} style={{ color: p.color === "#f1f5f9" ? "#475569" : p.color, margin: "2px 0", fontWeight: 600 }}>
@@ -43,7 +37,7 @@ export default function Analytics() {
   const [stores, setStores]           = useState([]);
   const [storeData, setStoreData]     = useState({});
   const [weatherData, setWeatherData] = useState([]);
-  const [suppliers, setSuppliers]     = useState([]);
+  const [suppliers, setSuppliers]     = useState([]);   // { name, score, leadTime }
   const [trendData, setTrendData]     = useState([]);
   const [loading, setLoading]         = useState(true);
   const [error, setError]             = useState(null);
@@ -56,28 +50,23 @@ export default function Analytics() {
       wsFetch("/dashboard/trend"),
     ])
       .then(([storesData, weatherRes, suppliersRes, trendRes]) => {
-        const storeIds = storesData.map(s => s.store_id);
-
         const storeObj = {};
         storesData.forEach(s => {
           storeObj[s.store_id] = {
-            promoD: s.promoD,
-            noPromoD: s.noPromoD,
-            avgDemand: s.avg_demand,
-            avgStock: s.avg_stock,
-            stockoutRate: s.stockout_rate
+            promoD: s.promoD, noPromoD: s.noPromoD,
+            avgDemand: s.avg_demand, avgStock: s.avg_stock,
+            stockoutRate: s.stockout_rate,
           };
         });
 
-        const formattedSuppliers = suppliersRes.map(sup => ({
-          name: sup.store_id,
-          score: Math.round(sup.avg_reliability_score)
-        }));
-
-        setStores(storeIds);
+        setStores(storesData.map(s => s.store_id));
         setStoreData(storeObj);
         setWeatherData(weatherRes);
-        setSuppliers(formattedSuppliers);
+        setSuppliers(suppliersRes.map(sup => ({
+          name: sup.store_id,
+          score: Math.round(sup.avg_reliability_score),
+          leadTime: sup.avg_lead_time_days,
+        })));
         setTrendData(trendRes);
         setLoading(false);
       })
@@ -88,14 +77,22 @@ export default function Analytics() {
       });
   }, []);
 
-  if (loading) return <p style={{ padding: 24 }}>Memuat analytics...</p>;
-  if (error)   return <p style={{ padding: 24, color: "#ef4444" }}>Error: {error}</p>;
+  if (loading) return (
+    <div className="page fade-up" style={{ display:'flex', justifyContent:'center', alignItems:'center', height:'80vh' }}>
+      <p style={{ color:'var(--text2)' }}>Memuat analytics...</p>
+    </div>
+  );
+  if (error) return (
+    <div className="page fade-up" style={{ display:'flex', justifyContent:'center', alignItems:'center', height:'80vh' }}>
+      <p style={{ color:'var(--red)' }}>Error: {error}</p>
+    </div>
+  );
 
-  // ── DERIVED DATA ─────────────────────────────────────────────
+  // ── DERIVED DATA (semua dihitung dari data real) ─────────────
   const filteredStores = storeFilter === "all" ? stores : [storeFilter];
 
   const promoChartData = filteredStores
-    .sort((a, b) => String(a).localeCompare(String(b), undefined, {numeric: true}))
+    .sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }))
     .map((s) => ({
       store: `Store ${s}`,
       promo:   storeData[s]?.promoD   ?? 0,
@@ -104,57 +101,67 @@ export default function Analytics() {
 
   const storeTableData = filteredStores.map((s) => ({ store: s, ...storeData[s] }));
 
-  const avgDemand = filteredStores.length ? Math.round(
-    filteredStores.reduce((a, s) => a + (storeData[s]?.avgDemand ?? 0), 0) / filteredStores.length
-  ) : 0;
-  const avgStockout = filteredStores.length ? (
-    filteredStores.reduce((a, s) => a + (storeData[s]?.stockoutRate ?? 0), 0) / filteredStores.length
-  ).toFixed(1) : "0.0";
+  const n = filteredStores.length || 1;
+
+  const avgDemand = Math.round(
+    filteredStores.reduce((a, s) => a + (storeData[s]?.avgDemand ?? 0), 0) / n
+  );
+  const avgStockout = (
+    filteredStores.reduce((a, s) => a + (storeData[s]?.stockoutRate ?? 0), 0) / n
+  ).toFixed(1);
+
+  // Promo uplift REAL: rata-rata demand saat promo vs tanpa promo
+  const totalPromo   = filteredStores.reduce((a, s) => a + (storeData[s]?.promoD   ?? 0), 0);
+  const totalNoPromo = filteredStores.reduce((a, s) => a + (storeData[s]?.noPromoD ?? 0), 0);
+  const promoUplift  = totalNoPromo > 0
+    ? Math.round(((totalPromo - totalNoPromo) / totalNoPromo) * 100)
+    : 0;
+
+  // Avg lead time REAL dari data supplier
+  const relevantSuppliers = suppliers.filter(s => filteredStores.includes(s.name));
+  const avgLeadTime = relevantSuppliers.length
+    ? (relevantSuppliers.reduce((a, s) => a + (s.leadTime ?? 0), 0) / relevantSuppliers.length).toFixed(1)
+    : "0.0";
 
   // ── RENDER ────────────────────────────────────────────────────
   return (
     <div className="page fade-up">
-      <div
-        className="page-header"
-        style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 32 }}
-      >
+      <div className="page-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 32 }}>
         <div>
           <h1>Analytics</h1>
           <p>Insight mendalam dari data inventory</p>
         </div>
-        <select
-          value={storeFilter}
-          onChange={(e) => setStoreFilter(e.target.value)}
-          className="filter-select"
-        >
+        <select value={storeFilter} onChange={(e) => setStoreFilter(e.target.value)} className="filter-select">
           <option value="all">Semua store</option>
-          {[...stores].sort((a, b) => String(a).localeCompare(String(b), undefined, {numeric: true})).map((s) => (
+          {[...stores].sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true })).map((s) => (
             <option key={s} value={s}>Store {s}</option>
           ))}
         </select>
       </div>
 
-      {/* KPIs */}
+      {/* KPIs — semua angka real */}
       <div className="grid-4" style={{ marginBottom: 24 }}>
         <div className="metric-card">
           <div className="metric-label">Avg Demand</div>
           <div className="metric-value">{avgDemand.toLocaleString()}</div>
-          <div className="metric-sub" style={{ color: "#10b981" }}>+8.2% vs periode lalu</div>
+          <div className="metric-sub" style={{ color: "var(--text2)" }}>unit / hari</div>
         </div>
         <div className="metric-card">
           <div className="metric-label">Promo uplift</div>
-          <div className="metric-value" style={{ color: "#7c6af7" }}>+34%</div>
-          <div className="metric-sub">demand saat promo aktif</div>
+          <div className="metric-value" style={{ color: "#7c6af7" }}>
+            {promoUplift >= 0 ? "+" : ""}{promoUplift}%
+          </div>
+          <div className="metric-sub" style={{ color: "var(--text2)" }}>demand promo vs non-promo</div>
         </div>
         <div className="metric-card">
           <div className="metric-label">Avg lead time</div>
-          <div className="metric-value" style={{ color: "#f59e0b" }}>4.2d</div>
-          <div className="metric-sub">across all suppliers</div>
+          <div className="metric-value" style={{ color: "#f59e0b" }}>{avgLeadTime}d</div>
+          <div className="metric-sub" style={{ color: "var(--text2)" }}>rata-rata semua supplier</div>
         </div>
         <div className="metric-card">
           <div className="metric-label">Stockout rate</div>
           <div className="metric-value" style={{ color: "#ef4444" }}>{avgStockout}%</div>
-          <div className="metric-sub" style={{ color: "#ef4444" }}>-2.1% vs periode lalu</div>
+          <div className="metric-sub" style={{ color: "var(--text2)" }}>produk berisiko habis</div>
         </div>
       </div>
 
@@ -162,18 +169,12 @@ export default function Analytics() {
       <div className="grid-2" style={{ marginBottom: 24 }}>
         <div className="chart-card">
           <div className="chart-title">Demand: Promo vs No Promo</div>
-          <div className="chart-header">
           <p style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
             Membandingkan lonjakan permintaan saat ada promo (batang penuh) vs hari biasa (batang transparan).
           </p>
-        </div>
           <div className="chart-legend">
-            <div className="legend-item">
-              <span className="legend-dot" style={{ background: "#7c6af7" }} />Promo aktif
-            </div>
-            <div className="legend-item">
-              <span className="legend-dot" style={{ background: "#e2e8f0", border: "1px solid #7c6af7" }} />No promo
-            </div>
+            <div className="legend-item"><span className="legend-dot" style={{ background: "#7c6af7" }} />Promo aktif</div>
+            <div className="legend-item"><span className="legend-dot" style={{ background: "#e2e8f0", border: "1px solid #7c6af7" }} />No promo</div>
           </div>
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={promoChartData} barGap={4}>
@@ -194,7 +195,6 @@ export default function Analytics() {
           </p>
           <div className="chart-legend">
             <div className="legend-item"><span className="legend-dot" style={{ background: "#f06292" }} />High risk</div>
-            <div className="legend-item"><span className="legend-dot" style={{ background: "#f59e0b" }} />Medium</div>
             <div className="legend-item"><span className="legend-dot" style={{ background: "#10b981" }} />Low risk</div>
           </div>
           <ResponsiveContainer width="100%" height={220}>
@@ -203,9 +203,8 @@ export default function Analytics() {
               <XAxis dataKey="weather" tick={{ fill: "#64748b", fontSize: 11 }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fill: "#64748b", fontSize: 11 }} axisLine={false} tickLine={false} />
               <Tooltip content={<CustomTooltip />} cursor={{ fill: "#f8fafc" }} />
-              <Bar dataKey="high"   name="High risk" stackId="a" fill="#f06292" />
-              <Bar dataKey="medium" name="Medium"    stackId="a" fill="#f59e0b" />
-              <Bar dataKey="low"    name="Low risk"  stackId="a" fill="#10b981" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="high" name="High risk" stackId="a" fill="#f06292" />
+              <Bar dataKey="low"  name="Low risk"  stackId="a" fill="#10b981" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -215,29 +214,17 @@ export default function Analytics() {
       <div className="grid-2" style={{ marginBottom: 24 }}>
         <div className="chart-card">
           <div className="chart-title">Supplier Reliability Score</div>
-          <div className="chart-header">
-  <p style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
-    Peringkat performa supplier. Skor tinggi berarti supplier jarang telat dan kirimannya selalu baik.
-  </p>
-</div>
+          <p style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
+            Peringkat performa supplier. Skor tinggi berarti supplier jarang telat dan kirimannya selalu baik.
+          </p>
           <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 16 }}>
-            {suppliers.map((s) => (
+            {relevantSuppliers.map((s) => (
               <div key={s.name} style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <span style={{ fontSize: 12, color: "#64748b", width: 80, fontWeight: 500 }}>{s.name}</span>
+                <span style={{ fontSize: 12, color: "#64748b", width: 80, fontWeight: 500 }}>Store {s.name}</span>
                 <div style={{ flex: 1, height: 8, background: "#f1f5f9", borderRadius: 4, overflow: "hidden" }}>
-                  <div
-                    style={{
-                      height: "100%",
-                      width: `${s.score}%`,
-                      background: supplierColor(s.score),
-                      borderRadius: 4,
-                      transition: "width 0.6s ease",
-                    }}
-                  />
+                  <div style={{ height: "100%", width: `${s.score}%`, background: supplierColor(s.score), borderRadius: 4, transition: "width 0.6s ease" }} />
                 </div>
-                <span style={{ fontSize: 12, color: supplierColor(s.score), width: 30, fontWeight: 700 }}>
-                  {s.score}
-                </span>
+                <span style={{ fontSize: 12, color: supplierColor(s.score), width: 30, fontWeight: 700 }}>{s.score}</span>
               </div>
             ))}
           </div>
@@ -245,11 +232,9 @@ export default function Analytics() {
 
         <div className="chart-card">
           <div className="chart-title">Stok vs Demand Harian</div>
-          <div className="chart-header">
-            <p style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
-              Garis Ungu (Stok) vs Garis Hijau (Demand). Aman jika garis ungu selalu di atas garis hijau.
-            </p>
-          </div>
+          <p style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
+            Garis Ungu (Stok) vs Garis Hijau (Demand). Aman jika garis ungu selalu di atas garis hijau.
+          </p>
           <div className="chart-legend">
             <div className="legend-item"><span className="legend-dot" style={{ background: "#7c6af7" }} />Stok</div>
             <div className="legend-item"><span className="legend-dot" style={{ background: "#10b981" }} />Demand</div>
@@ -258,12 +243,8 @@ export default function Analytics() {
             <LineChart data={trendData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
               <XAxis dataKey="date" tick={{ fill: "#64748b", fontSize: 11 }} axisLine={false} tickLine={false} />
-              <YAxis
-                tick={{ fill: "#64748b", fontSize: 11 }}
-                axisLine={false}
-                tickLine={false}
-                tickFormatter={(v) => (v >= 1000 ? `${Math.round(v / 1000)}k` : v)}
-              />
+              <YAxis tick={{ fill: "#64748b", fontSize: 11 }} axisLine={false} tickLine={false}
+                tickFormatter={(v) => (v >= 1000 ? `${Math.round(v / 1000)}k` : v)} />
               <Tooltip content={<CustomTooltip />} />
               <Line type="monotone" dataKey="stock"  name="Stok"   stroke="#7c6af7" strokeWidth={3} dot={{ r: 4, fill: "#7c6af7" }} activeDot={{ r: 6 }} />
               <Line type="monotone" dataKey="demand" name="Demand" stroke="#10b981" strokeWidth={3} strokeDasharray="6 6" dot={{ r: 4, fill: "#10b981" }} />
@@ -282,11 +263,7 @@ export default function Analytics() {
           <table>
             <thead>
               <tr>
-                <th>STORE</th>
-                <th>STOCKOUT RATE</th>
-                <th>AVG DEMAND</th>
-                <th>AVG STOK</th>
-                <th>STATUS</th>
+                <th>STORE</th><th>STOCKOUT RATE</th><th>AVG DEMAND</th><th>AVG STOK</th><th>STATUS</th>
               </tr>
             </thead>
             <tbody>
@@ -308,16 +285,7 @@ export default function Analytics() {
                     <td>{d.avgDemand} unit</td>
                     <td>{d.avgStock} unit</td>
                     <td>
-                      <span
-                        style={{
-                          padding: "4px 12px",
-                          borderRadius: 20,
-                          background: rateBg,
-                          color: rateColor,
-                          fontSize: 11,
-                          fontWeight: 700,
-                        }}
-                      >
+                      <span style={{ padding: "4px 12px", borderRadius: 20, background: rateBg, color: rateColor, fontSize: 11, fontWeight: 700 }}>
                         {status}
                       </span>
                     </td>
