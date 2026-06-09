@@ -777,12 +777,24 @@ def compute_risk(stock, demand, lead, supplier, promo, weather, ws):
 @app.post("/upload/analyze")
 async def upload_analyze(file: UploadFile = File(...), ws: str = Depends(get_workspace)):
     """Baca header + contoh baris, kembalikan tebakan mapping (AI → fallback heuristik)."""
-    contents = await file.read()
-    df = _read_upload(file.filename, contents)
-    columns = [str(c) for c in df.columns]
-    sample_rows = json.loads(df.head(3).astype(str).to_json(orient="records"))
-    mapping = ai_map(columns, sample_rows) or heuristic_map(columns)
-    return {"columns": columns, "sample_rows": sample_rows, "suggested_mapping": mapping}
+    try:
+        contents = await file.read()
+        df = _read_upload(file.filename, contents)
+        columns = [str(c) for c in df.columns]
+        
+        # Mencegah error kalau CSV-nya kosong melompong
+        if df.empty:
+            raise HTTPException(status_code=400, detail="File excel/csv kosong!")
+
+        sample_rows = json.loads(df.head(3).astype(str).to_json(orient="records"))
+        mapping = ai_map(columns, sample_rows) or heuristic_map(columns)
+        
+        return {"columns": columns, "sample_rows": sample_rows, "suggested_mapping": mapping}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"ERROR ANALYZE: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Server gagal baca file: {str(e)}")
 
 @app.post("/upload/confirm")
 async def upload_confirm(file: UploadFile = File(...), mapping: str = Form(...),

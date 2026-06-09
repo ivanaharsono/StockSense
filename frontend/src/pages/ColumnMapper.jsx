@@ -28,7 +28,13 @@ export default function ColumnMapper({ file, onClose, onDone }) {
       try {
         const fd = new FormData();
         fd.append("file", file);
-        const res = await api.post("/upload/analyze", fd);
+        
+        // Tambahin headers multipart biar Axios gak maksa jadi JSON
+        const res = await api.post("/upload/analyze", fd, {
+          headers: {
+            "Content-Type": "multipart/form-data"
+          }
+        });
         if (cancelled) return;
         setColumns(res.data.columns || []);
         setSample(res.data.sample_rows || []);
@@ -80,7 +86,7 @@ export default function ColumnMapper({ file, onClose, onDone }) {
           <div>
             <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "#0f172a" }}>Map your columns</h3>
             <p style={{ margin: "4px 0 0", fontSize: 12, color: "#64748b" }}>
-              We detected your columns automatically adjust if needed.
+              We detected your columns automatically (adjust if needed).
             </p>
           </div>
           <button onClick={() => !importing && onClose?.()}
