@@ -31,9 +31,7 @@ export default function ColumnMapper({ file, onClose, onDone }) {
         
         // Tambahin headers multipart biar Axios gak maksa jadi JSON
         const res = await api.post("/upload/analyze", fd, {
-          headers: {
-            "Content-Type": "multipart/form-data"
-          }
+          headers: { "Content-Type": "multipart/form-data" },
         });
         if (cancelled) return;
         setColumns(res.data.columns || []);
@@ -59,7 +57,9 @@ export default function ColumnMapper({ file, onClose, onDone }) {
       const fd = new FormData();
       fd.append("file", file);
       fd.append("mapping", JSON.stringify(mapping));
-      const res = await api.post("/upload/confirm", fd);
+      const res = await api.post("/upload/confirm", fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
       onDone?.(file.name, res.data);
     } catch (err) {
       setError(err.response?.data?.detail || "Import failed.");
