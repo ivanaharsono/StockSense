@@ -77,9 +77,6 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchDashboardData();
-    // Auto-refresh setiap 30 detik
-    const interval = setInterval(fetchDashboardData, 30000);
-    return () => clearInterval(interval);
   }, []);
 
   // ── Upload file ────────────────────────────────────────────────────────────
