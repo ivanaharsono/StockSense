@@ -1,14 +1,14 @@
 import { useState, useEffect } from "react";
 import api from "../api";
 
-// Field target + label tampilan
+// Field target + label + penjelasan awam
 const TARGETS = [
-  { key: "product_id",                 label: "Product ID",     required: true },
-  { key: "store_id",                   label: "Store",          required: false },
-  { key: "current_stock",              label: "Current Stock",  required: false },
-  { key: "daily_demand",               label: "Daily Demand",   required: false },
-  { key: "lead_time_days",             label: "Lead Time (days)", required: false },
-  { key: "supplier_reliability_score", label: "Supplier Score", required: false },
+  { key: "product_id",                 label: "Product ID",       required: true,  hint: "Kode unik tiap barang (wajib)" },
+  { key: "store_id",                   label: "Store",            required: false, hint: "Lokasi, cabang, atau gudang" },
+  { key: "current_stock",              label: "Current Stock",    required: false, hint: "Jumlah stok yang ada sekarang" },
+  { key: "daily_demand",               label: "Daily Demand",     required: false, hint: "Rata-rata terjual per hari" },
+  { key: "lead_time_days",             label: "Lead Time (days)", required: false, hint: "Berapa hari barang sampai setelah dipesan" },
+  { key: "supplier_reliability_score", label: "Supplier Score",   required: false, hint: "Nilai keandalan supplier (0–100)" },
 ];
 
 export default function ColumnMapper({ file, onClose, onDone }) {
@@ -28,8 +28,6 @@ export default function ColumnMapper({ file, onClose, onDone }) {
       try {
         const fd = new FormData();
         fd.append("file", file);
-        
-        // Tambahin headers multipart biar Axios gak maksa jadi JSON
         const res = await api.post("/upload/analyze", fd, {
           headers: { "Content-Type": "multipart/form-data" },
         });
@@ -48,6 +46,17 @@ export default function ColumnMapper({ file, onClose, onDone }) {
 
   const setField = (key) => (e) =>
     setMapping((m) => ({ ...m, [key]: e.target.value || null }));
+
+  // Ambil contoh isi dari kolom yang dipilih (maks 3 nilai)
+  const previewOf = (col) => {
+    if (!col) return null;
+    const vals = sample
+      .map((row) => row?.[col])
+      .filter((v) => v !== undefined && v !== null && String(v).trim() !== "" && String(v) !== "nan")
+      .slice(0, 3)
+      .map((v) => String(v).length > 14 ? String(v).slice(0, 14) + "…" : String(v));
+    return vals.length ? vals.join(", ") : null;
+  };
 
   // 2. Konfirmasi → import
   const handleImport = async () => {
@@ -68,7 +77,6 @@ export default function ColumnMapper({ file, onClose, onDone }) {
     }
   };
 
-  // kolom yang belum dipetakan → bakal jadi kolom custom
   const mappedCols = new Set(Object.values(mapping).filter(Boolean));
   const extraCols  = columns.filter((c) => !mappedCols.has(c));
 
@@ -78,7 +86,7 @@ export default function ColumnMapper({ file, onClose, onDone }) {
       style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.5)", backdropFilter: "blur(2px)",
                zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}
     >
-      <div style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 520, maxHeight: "88vh",
+      <div style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 560, maxHeight: "88vh",
                     overflowY: "auto", padding: "26px 28px", boxShadow: "0 20px 60px rgba(0,0,0,0.2)" }}>
 
         {/* Header */}
@@ -86,7 +94,7 @@ export default function ColumnMapper({ file, onClose, onDone }) {
           <div>
             <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "#0f172a" }}>Map your columns</h3>
             <p style={{ margin: "4px 0 0", fontSize: 12, color: "#64748b" }}>
-              We detected your columns automatically (adjust if needed).
+              Cocokkan kolom file kamu dengan kolom sistem. Yang tidak punya pasangan, biarkan kosong.
             </p>
           </div>
           <button onClick={() => !importing && onClose?.()}
@@ -106,31 +114,48 @@ export default function ColumnMapper({ file, onClose, onDone }) {
             </div>
 
             {/* mapping rows */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {TARGETS.map((t) => (
-                <div key={t.key} style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <span style={{ width: 140, fontSize: 13, fontWeight: 600, color: "#334155", flexShrink: 0 }}>
-                    {t.label}{t.required && <span style={{ color: "#ef4444" }}> *</span>}
-                  </span>
-                  <select
-                    value={mapping[t.key] || ""}
-                    onChange={setField(t.key)}
-                    style={{ flex: 1, padding: "9px 12px", borderRadius: 8, fontSize: 13,
-                             border: `1.5px solid ${t.required && !mapping[t.key] ? "#fecaca" : "#e2e8f0"}`,
-                             background: "#fff", color: "#1e293b", outline: "none" }}
-                  >
-                    <option value="">— none —</option>
-                    {columns.map((c) => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
-              ))}
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              {TARGETS.map((t) => {
+                const preview = previewOf(mapping[t.key]);
+                return (
+                  <div key={t.key} style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
+                    {/* label + penjelasan */}
+                    <div style={{ width: 175, flexShrink: 0, paddingTop: 2 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "#334155" }}>
+                        {t.label}{t.required && <span style={{ color: "#ef4444" }}> *</span>}
+                      </div>
+                      <div style={{ fontSize: 11, color: "#94a3b8", lineHeight: 1.4, marginTop: 2 }}>
+                        {t.hint}
+                      </div>
+                    </div>
+                    {/* dropdown + contoh data */}
+                    <div style={{ flex: 1 }}>
+                      <select
+                        value={mapping[t.key] || ""}
+                        onChange={setField(t.key)}
+                        style={{ width: "100%", padding: "9px 12px", borderRadius: 8, fontSize: 13,
+                                 border: `1.5px solid ${t.required && !mapping[t.key] ? "#fecaca" : "#e2e8f0"}`,
+                                 background: "#fff", color: "#1e293b", outline: "none" }}
+                      >
+                        <option value="">— none —</option>
+                        {columns.map((c) => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                      {preview && (
+                        <div style={{ fontSize: 11, color: "#64748b", marginTop: 4, paddingLeft: 2 }}>
+                          Contoh: <span style={{ fontFamily: "var(--mono)", color: "#475569" }}>{preview}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
 
             {/* note kolom custom */}
             {extraCols.length > 0 && (
-              <p style={{ fontSize: 12, color: "#64748b", marginTop: 16, lineHeight: 1.6 }}>
-                <strong style={{ color: "var(--accent2)" }}>{extraCols.length} extra column(s)</strong> ({extraCols.join(", ")})
-                {" "}will be kept as custom columns. Unmapped fields use safe defaults.
+              <p style={{ fontSize: 12, color: "#64748b", marginTop: 18, lineHeight: 1.6 }}>
+                <strong style={{ color: "var(--accent2)" }}>{extraCols.length} kolom lain</strong> ({extraCols.join(", ")})
+                {" "}akan disimpan sebagai kolom tambahan. Field yang kosong pakai nilai default aman.
               </p>
             )}
 
